@@ -9,8 +9,10 @@ import "DIARewardsDistribution.sol";
 contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     struct StakingStore {
         address beneficiary;
+        address principalPayoutWallet;
         uint256 principal;
         uint256 reward;
+        uint256 paidOutReward;
         uint256 stakingStartTime;
         uint256 unstakingRequestTime;
     }
@@ -42,6 +44,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         numStakers++;
         StakingStore storage newStore = stakingStores[numStakers];
         newStore.beneficiary = beneficiaryAddress;
+        newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
     }
@@ -51,12 +54,19 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         return stakeForAddress(msg.sender, amount);
     }
 
+    // Update the wallet that will receive the principal
+    // Can only be changed by the owner of the contract
+    function updatePrincipalPayoutWallet(address newWallet, uint256 stakingStoreIndex) external onlyOwner {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        currentStore.principalPayoutWallet = newWallet;
+    }
+
     // Request to unstake, the unstake period starts now.
     // This can only be requested once.
     function requestUnstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         require(msg.sender == currentStore.beneficiary, "Only beneficiary can request unstake.");
-        require(currentStore.unstakingRequestTime == 0, "You can only request to unstake once.");
+        require(currentStore.unstakingRequestTime == 0, "You can only request to unstake once in parallel.");
         currentStore.unstakingRequestTime = block.timestamp;
     }
 
@@ -68,14 +78,31 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
 
-        uint256 rewardToSend = currentStore.reward;
-        currentStore.reward = 0;
-        uint256 principalToSend = currentStore.principal;
-        currentStore.principal = 0;
+        uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
+        currentStore.paidOutReward += rewardToSend;
         
         // Send tokens to beneficiary
-        stakingToken.transfer(currentStore.beneficiary, principalToSend);
         stakingToken.transferFrom(rewardsWallet, currentStore.beneficiary, rewardToSend);
+        currentStore.unstakingRequestTime = 0;
+    }
+
+    // Unstake principal immediately
+    // Only possible for the principal admin
+    function unstakePrincipal(uint256 stakingStoreIndex) external onlyOwner {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        updateReward(stakingStoreIndex);
+
+        uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
+        currentStore.paidOutReward += rewardToSend;
+        
+        // Send remaining reward tokens to beneficiary
+        stakingToken.transferFrom(rewardsWallet, currentStore.beneficiary, rewardToSend);
+        currentStore.unstakingRequestTime = 0;
+
+        // Pay out principal
+        uint256 principalToSend = currentStore.principal;
+        currentStore.principal = 0;
+        stakingToken.transfer(currentStore.principalPayoutWallet, principalToSend);
     }
 
     function addWhitelistedStaker(address newStakerAddress) onlyOwner external {
