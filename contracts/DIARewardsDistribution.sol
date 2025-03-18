@@ -25,5 +25,7 @@ abstract contract DIARewardsDistribution is Ownable {
         rewardsWallet = newWalletAddress;
     }
 
-    function getRewardForStakingStore(uint256 stakingStoreIndex) public virtual returns(uint256);
+    function getRewardForStakingStore(
+        uint256 stakingStoreIndex
+    ) public virtual returns (uint256);
 }
