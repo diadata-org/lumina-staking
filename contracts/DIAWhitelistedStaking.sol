@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.29;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "./DIARewardsDistribution.sol";
 
 contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
@@ -18,17 +18,28 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     }
 
     // How long (in seconds) for unstaking to take place
-    uint256 unstakingDuration;
+    uint256 public unstakingDuration;
 
     IERC20 public stakingToken;
 
-    uint256 numStakers;
+    uint256 public numStakers;
 
     mapping(address => bool) public stakingWhitelist;
     mapping(uint256 => StakingStore) public stakingStores;
 
     event StakerAddressAdded(address newStaker);
     event StakerAddressRemoved(address removedStaker);
+
+    error NotBeneficiary();
+    error AlreadyRequestedUnstake();
+    error UnstakingNotRequested();
+    error UnstakingPeriodNotElapsed();
+
+    error UnstakingDurationTooShort();
+    error UnstakingDurationTooLong();
+    error AlreadyWhitelisted();
+
+    error NotWhitelisted();
 
     constructor(
         uint256 newUnstakingDuration,
@@ -79,28 +90,28 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     // This can only be requested once.
     function requestUnstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        require(
-            msg.sender == currentStore.beneficiary,
-            "Only beneficiary can request unstake."
-        );
-        require(
-            currentStore.unstakingRequestTime == 0,
-            "You can only request to unstake once in parallel."
-        );
+        if (msg.sender != currentStore.beneficiary) {
+            revert NotBeneficiary();
+        }
+
+        if (currentStore.unstakingRequestTime != 0) {
+            revert AlreadyRequestedUnstake();
+        }
         currentStore.unstakingRequestTime = block.timestamp;
     }
 
     function unstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        require(
-            currentStore.unstakingRequestTime > 0,
-            "Unstaking must be requested first."
-        );
-        require(
-            currentStore.unstakingRequestTime + unstakingDuration <=
-                block.timestamp,
-            "The unstaking duration must pass after unstaking has been requested."
-        );
+        if (currentStore.unstakingRequestTime == 0) {
+            revert UnstakingNotRequested();
+        }
+
+        if (
+            currentStore.unstakingRequestTime + unstakingDuration >
+            block.timestamp
+        ) {
+            revert UnstakingPeriodNotElapsed();
+        }
 
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
@@ -144,7 +155,9 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     }
 
     function addWhitelistedStaker(address newStakerAddress) external onlyOwner {
-        require(stakingWhitelist[newStakerAddress] == false);
+        if (stakingWhitelist[newStakerAddress]) {
+            revert AlreadyWhitelisted();
+        }
         stakingWhitelist[newStakerAddress] = true;
         emit StakerAddressAdded(newStakerAddress);
     }
@@ -152,21 +165,22 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     function removeWhitelistedStaker(
         address stakerAddressToRemove
     ) external onlyOwner {
-        require(stakingWhitelist[stakerAddressToRemove] == true);
+        if (!stakingWhitelist[stakerAddressToRemove]) {
+            revert NotWhitelisted();
+        }
         stakingWhitelist[stakerAddressToRemove] = false;
         emit StakerAddressRemoved(stakerAddressToRemove);
     }
 
     // Update unstaking duration, measured in seconds
     function setUnstakingDuration(uint256 newDuration) external onlyOwner {
-        require(
-            newDuration >= 1 * 24 * 60 * 60,
-            "Minimal unstaking duration is 1 day"
-        );
-        require(
-            newDuration <= 20 * 24 * 60 * 60,
-            "Maximum unstaking duration is 20 days"
-        );
+        if (newDuration < 1 days) {
+            revert UnstakingDurationTooShort();
+        }
+
+        if (newDuration > 20 days) {
+            revert UnstakingDurationTooLong();
+        }
         unstakingDuration = newDuration;
     }
 

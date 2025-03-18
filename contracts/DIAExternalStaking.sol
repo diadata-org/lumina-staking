@@ -17,13 +17,22 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     }
 
     // How long (in seconds) for unstaking to take place
-    uint256 unstakingDuration;
+    uint256 public unstakingDuration;
 
     IERC20 public stakingToken;
 
-    uint256 numStakers;
+    uint256 public numStakers;
 
     mapping(uint256 => StakingStore) public stakingStores;
+
+
+    error NotBeneficiary();
+error AlreadyRequestedUnstake();
+error UnstakingNotRequested();
+error UnstakingPeriodNotElapsed();
+
+error UnstakingDurationTooShort();
+error UnstakingDurationTooLong();
 
     constructor(
         uint256 newUnstakingDuration,
@@ -41,6 +50,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     function stake(uint256 amount) public {
         // Get the tokens into the staking contract
         require(stakingToken.transfer(address(this), amount));
+
+        
         // Register tokens after transfer
         numStakers++;
         StakingStore storage newStore = stakingStores[numStakers];
@@ -53,28 +64,26 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     // This can only be requested once.
     function requestUnstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        require(
-            msg.sender == currentStore.beneficiary,
-            "Only beneficiary can request unstake."
-        );
-        require(
-            currentStore.unstakingRequestTime == 0,
-            "You can only request to unstake once."
-        );
+       
+    if (msg.sender != currentStore.beneficiary) {
+        revert NotBeneficiary();
+    }
+
+    if (currentStore.unstakingRequestTime != 0) {
+        revert AlreadyRequestedUnstake();
+    }
         currentStore.unstakingRequestTime = block.timestamp;
     }
 
     function unstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        require(
-            currentStore.unstakingRequestTime > 0,
-            "Unstaking must be requested first."
-        );
-        require(
-            currentStore.unstakingRequestTime + unstakingDuration <=
-                block.timestamp,
-            "The unstaking duration must pass after unstaking has been requested."
-        );
+       if (currentStore.unstakingRequestTime == 0) {
+        revert UnstakingNotRequested();
+    }
+
+    if (currentStore.unstakingRequestTime + unstakingDuration > block.timestamp) {
+        revert UnstakingPeriodNotElapsed();
+    }
 
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
@@ -95,14 +104,13 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     // Update unstaking duration, measured in seconds
     function setUnstakingDuration(uint256 newDuration) external onlyOwner {
-        require(
-            newDuration >= 1 * 24 * 60 * 60,
-            "Minimal unstaking duration is 1 day"
-        );
-        require(
-            newDuration <= 20 * 24 * 60 * 60,
-            "Maximum unstaking duration is 20 days"
-        );
+         if (newDuration < 1 days) {
+        revert UnstakingDurationTooShort();
+    }
+
+    if (newDuration > 20 days) {
+        revert UnstakingDurationTooLong();
+    }
         unstakingDuration = newDuration;
     }
 
@@ -116,7 +124,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 passedDays = (passedSeconds / 24) * 60 * 60;
 
         uint256 accumulatedReward = currentStore.principal;
-        for (uint i = 0; i < passedDays; ++i) {
+        for (uint256 i = 0; i < passedDays; ++i) {
             accumulatedReward += (accumulatedReward * rewardRatePerDay) / 1e10;
         }
         return accumulatedReward - currentStore.principal;

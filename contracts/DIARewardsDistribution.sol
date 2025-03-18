@@ -9,8 +9,8 @@ abstract contract DIARewardsDistribution is Ownable {
     IERC20 public rewardsToken;
 
     // Reward rate per day, with 10 decimals
-    uint256 rewardRatePerDay;
-    address rewardsWallet;
+    uint256 public rewardRatePerDay;
+    address public rewardsWallet;
 
     constructor(address rewardsTokenAddress, uint256 newRewardRate) {
         rewardsToken = IERC20(rewardsTokenAddress);
