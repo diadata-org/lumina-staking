@@ -2,9 +2,10 @@
 
 pragma solidity 0.8.26;
 
-import "Ownable.sol";
-import "IERC20.sol";
-import "DIARewardsDistribution.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+
+import "./DIARewardsDistribution.sol";
 
 contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     struct StakingStore {
