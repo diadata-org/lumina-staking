@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.29;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 abstract contract DIARewardsDistribution is Ownable {
     IERC20 public rewardsToken;

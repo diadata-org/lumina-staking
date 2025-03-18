@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.29;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 import "./DIARewardsDistribution.sol";
 
@@ -25,14 +25,13 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     mapping(uint256 => StakingStore) public stakingStores;
 
-
     error NotBeneficiary();
-error AlreadyRequestedUnstake();
-error UnstakingNotRequested();
-error UnstakingPeriodNotElapsed();
+    error AlreadyRequestedUnstake();
+    error UnstakingNotRequested();
+    error UnstakingPeriodNotElapsed();
 
-error UnstakingDurationTooShort();
-error UnstakingDurationTooLong();
+    error UnstakingDurationTooShort();
+    error UnstakingDurationTooLong();
 
     constructor(
         uint256 newUnstakingDuration,
@@ -51,7 +50,6 @@ error UnstakingDurationTooLong();
         // Get the tokens into the staking contract
         require(stakingToken.transfer(address(this), amount));
 
-        
         // Register tokens after transfer
         numStakers++;
         StakingStore storage newStore = stakingStores[numStakers];
@@ -64,26 +62,29 @@ error UnstakingDurationTooLong();
     // This can only be requested once.
     function requestUnstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-       
-    if (msg.sender != currentStore.beneficiary) {
-        revert NotBeneficiary();
-    }
 
-    if (currentStore.unstakingRequestTime != 0) {
-        revert AlreadyRequestedUnstake();
-    }
+        if (msg.sender != currentStore.beneficiary) {
+            revert NotBeneficiary();
+        }
+
+        if (currentStore.unstakingRequestTime != 0) {
+            revert AlreadyRequestedUnstake();
+        }
         currentStore.unstakingRequestTime = block.timestamp;
     }
 
     function unstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-       if (currentStore.unstakingRequestTime == 0) {
-        revert UnstakingNotRequested();
-    }
+        if (currentStore.unstakingRequestTime == 0) {
+            revert UnstakingNotRequested();
+        }
 
-    if (currentStore.unstakingRequestTime + unstakingDuration > block.timestamp) {
-        revert UnstakingPeriodNotElapsed();
-    }
+        if (
+            currentStore.unstakingRequestTime + unstakingDuration >
+            block.timestamp
+        ) {
+            revert UnstakingPeriodNotElapsed();
+        }
 
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
@@ -104,13 +105,13 @@ error UnstakingDurationTooLong();
 
     // Update unstaking duration, measured in seconds
     function setUnstakingDuration(uint256 newDuration) external onlyOwner {
-         if (newDuration < 1 days) {
-        revert UnstakingDurationTooShort();
-    }
+        if (newDuration < 1 days) {
+            revert UnstakingDurationTooShort();
+        }
 
-    if (newDuration > 20 days) {
-        revert UnstakingDurationTooLong();
-    }
+        if (newDuration > 20 days) {
+            revert UnstakingDurationTooLong();
+        }
         unstakingDuration = newDuration;
     }
 
