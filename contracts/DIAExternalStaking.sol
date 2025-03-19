@@ -3,11 +3,16 @@
 pragma solidity 0.8.29;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./DIARewardsDistribution.sol";
 
 contract DIAExternalStaking is Ownable, DIARewardsDistribution {
+    using SafeERC20 for IERC20;
+
+    event UnstakingDurationUpdated(uint256 oldDuration, uint256 newDuration);
+
     struct StakingStore {
         address beneficiary;
         uint256 principal;
@@ -19,7 +24,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     // How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 
-    IERC20 public stakingToken;
+    IERC20 public immutable stakingToken;
 
     uint256 public numStakers;
 
@@ -34,21 +39,26 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     error UnstakingDurationTooLong();
 
     constructor(
-        uint256 newUnstakingDuration,
-        address stakingTokenAddress,
-        uint256 rewardRatePerDay
+        uint256 _unstakingDuration,
+        address _stakingTokenAddress,
+        address _rewardsWallet,
+        uint256 _rewardRatePerDay
     )
         Ownable(msg.sender)
-        DIARewardsDistribution(stakingTokenAddress, rewardRatePerDay)
+        DIARewardsDistribution(
+            _stakingTokenAddress,
+            _rewardsWallet,
+            _rewardRatePerDay
+        )
     {
-        unstakingDuration = newUnstakingDuration;
-        stakingToken = IERC20(stakingTokenAddress);
+        unstakingDuration = _unstakingDuration;
+        stakingToken = IERC20(_stakingTokenAddress);
     }
 
     // Stake
     function stake(uint256 amount) public {
         // Get the tokens into the staking contract
-        require(stakingToken.transfer(address(this), amount));
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // Register tokens after transfer
         numStakers++;
@@ -70,6 +80,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
         }
+
         currentStore.unstakingRequestTime = block.timestamp;
     }
 
@@ -95,8 +106,9 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         currentStore.principal = 0;
 
         // Send tokens to beneficiary
-        stakingToken.transfer(currentStore.beneficiary, principalToSend);
-        stakingToken.transferFrom(
+        stakingToken.safeTransfer(currentStore.beneficiary, principalToSend);
+
+        stakingToken.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
             rewardToSend
@@ -112,6 +124,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         if (newDuration > 20 days) {
             revert UnstakingDurationTooLong();
         }
+        emit UnstakingDurationUpdated(unstakingDuration, newDuration);
+
         unstakingDuration = newDuration;
     }
 
@@ -122,19 +136,23 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
         // Calculate number of full days that passed for staking store
         uint256 passedSeconds = block.timestamp - currentStore.stakingStartTime;
-        uint256 passedDays = (passedSeconds / 24) * 60 * 60;
+
+        uint256 passedDays = passedSeconds / (24 * 60 * 60);
 
         uint256 accumulatedReward = currentStore.principal;
-        for (uint256 i = 0; i < passedDays; ++i) {
+        for (uint i = 0; i < passedDays; ++i) {
             accumulatedReward += (accumulatedReward * rewardRatePerDay) / 1e10;
         }
+
         return accumulatedReward - currentStore.principal;
     }
 
     // Calculate and store reward for the staker
     function updateReward(uint256 stakingStoreIndex) public {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
         uint256 reward = getRewardForStakingStore(stakingStoreIndex);
+
         assert(reward >= currentStore.reward);
 
         currentStore.reward = reward;

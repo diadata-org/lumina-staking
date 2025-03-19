@@ -4,9 +4,11 @@ pragma solidity 0.8.29;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./DIARewardsDistribution.sol";
 
 contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
+    using SafeERC20 for IERC20;
     struct StakingStore {
         address beneficiary;
         address principalPayoutWallet;
@@ -44,10 +46,15 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     constructor(
         uint256 newUnstakingDuration,
         address stakingTokenAddress,
+        address rewardsWallet,
         uint256 rewardRatePerDay
     )
         Ownable(msg.sender)
-        DIARewardsDistribution(stakingTokenAddress, rewardRatePerDay)
+        DIARewardsDistribution(
+            stakingTokenAddress,
+            rewardsWallet,
+            rewardRatePerDay
+        )
     {
         unstakingDuration = newUnstakingDuration;
         stakingToken = IERC20(stakingTokenAddress);
@@ -59,9 +66,12 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         uint256 amount
     ) public {
         // Get the tokens into the staking contract
-        require(
-            stakingToken.transferFrom(beneficiaryAddress, address(this), amount)
+        stakingToken.safeTransferFrom(
+            beneficiaryAddress,
+            address(this),
+            amount
         );
+
         // Register tokens after transfer
         numStakers++;
         StakingStore storage newStore = stakingStores[numStakers];
@@ -120,7 +130,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         currentStore.paidOutReward += rewardToSend;
 
         // Send tokens to beneficiary
-        stakingToken.transferFrom(
+        stakingToken.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
             rewardToSend
@@ -191,7 +201,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
 
         // Calculate number of full days that passed for staking store
         uint256 passedSeconds = block.timestamp - currentStore.stakingStartTime;
-        uint256 passedDays = (passedSeconds / 24) * 60 * 60;
+        uint256 passedDays = passedSeconds / (24 * 60 * 60);
 
         return rewardRatePerDay * passedDays;
     }

@@ -6,3 +6,4 @@ solc_version = "0.8.29"
 test = "test-foundry"
 gas_price = 10
 gas_reports = ["*"]
+remappings = ["@openzeppelin=lib/openzeppelin-contracts/"]
