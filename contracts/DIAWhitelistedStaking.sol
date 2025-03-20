@@ -19,6 +19,8 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         uint256 unstakingRequestTime;
     }
 
+    
+
     // How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 
@@ -136,6 +138,8 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
             rewardToSend
         );
         currentStore.unstakingRequestTime = 0;
+        currentStore.reward = 0;
+
     }
 
     // Unstake principal immediately

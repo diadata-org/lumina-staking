@@ -24,7 +24,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     // How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 
-    IERC20 public immutable stakingToken;
+    IERC20 public immutable STAKING_TOKEN;
 
     uint256 public numStakers;
 
@@ -52,13 +52,13 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         )
     {
         unstakingDuration = _unstakingDuration;
-        stakingToken = IERC20(_stakingTokenAddress);
+        STAKING_TOKEN = IERC20(_stakingTokenAddress);
     }
 
     // Stake
     function stake(uint256 amount) public {
         // Get the tokens into the staking contract
-        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
 
         // Register tokens after transfer
         numStakers++;
@@ -106,9 +106,9 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         currentStore.principal = 0;
 
         // Send tokens to beneficiary
-        stakingToken.safeTransfer(currentStore.beneficiary, principalToSend);
+        STAKING_TOKEN.safeTransfer(currentStore.beneficiary, principalToSend);
 
-        stakingToken.safeTransferFrom(
+        STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
             rewardToSend

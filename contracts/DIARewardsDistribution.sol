@@ -6,7 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 abstract contract DIARewardsDistribution is Ownable {
-    IERC20 public immutable rewardsToken;
+    IERC20 public immutable REWARDS_TOKEN;
 
     // Reward rate per day, with 10 decimals
     uint256 public rewardRatePerDay;
@@ -22,7 +22,7 @@ abstract contract DIARewardsDistribution is Ownable {
         address newRewardsWallet,
         uint256 newRewardRate
     ) {
-        rewardsToken = IERC20(rewardsTokenAddress);
+        REWARDS_TOKEN = IERC20(rewardsTokenAddress);
         rewardRatePerDay = newRewardRate;
         rewardsWallet = newRewardsWallet;
     }
