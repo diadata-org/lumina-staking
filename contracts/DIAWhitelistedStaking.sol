@@ -67,6 +67,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         address beneficiaryAddress,
         uint256 amount
     ) public {
+			  require(stakingWhitelist[beneficiaryAddress] == true, "Beneficiary must be in staking whitelist.");
         uint256 minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 
         if (amount < minimumStake) {
