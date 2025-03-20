@@ -38,6 +38,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     error UnstakingDurationTooShort();
     error UnstakingDurationTooLong();
 
+    error AmountBelowMinimumStake(uint256 amount);
+
     constructor(
         uint256 _unstakingDuration,
         address _stakingTokenAddress,
@@ -57,6 +59,11 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     // Stake
     function stake(uint256 amount) public {
+        uint256 minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
+        if (amount < minimumStake) {
+            revert AmountBelowMinimumStake(amount);
+        }
+
         // Get the tokens into the staking contract
         STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
 

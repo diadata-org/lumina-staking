@@ -19,8 +19,6 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         uint256 unstakingRequestTime;
     }
 
-    
-
     // How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 
@@ -42,6 +40,8 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     error UnstakingDurationTooShort();
     error UnstakingDurationTooLong();
     error AlreadyWhitelisted();
+
+    error AmountBelowMinimumStake(uint256 amount);
 
     error NotWhitelisted();
 
@@ -67,6 +67,11 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         address beneficiaryAddress,
         uint256 amount
     ) public {
+        uint256 minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
+
+        if (amount < minimumStake) {
+            revert AmountBelowMinimumStake(amount);
+        }
         // Get the tokens into the staking contract
         stakingToken.safeTransferFrom(
             beneficiaryAddress,
@@ -139,7 +144,6 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         );
         currentStore.unstakingRequestTime = 0;
         currentStore.reward = 0;
-
     }
 
     // Unstake principal immediately
