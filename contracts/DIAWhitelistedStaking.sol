@@ -12,6 +12,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     struct StakingStore {
         address beneficiary;
         address principalPayoutWallet;
+				address principalUnstaker;
         uint256 principal;
         uint256 reward;
         uint256 paidOutReward;
@@ -87,6 +88,9 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
+				if (beneficiaryAddress == msg.sender) {
+					newStore.principalUnstaker = msg.sender;
+				}
     }
 
     // Stake directly for message sender
@@ -102,6 +106,21 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     ) external onlyOwner {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         currentStore.principalPayoutWallet = newWallet;
+    }
+
+    // Update the wallet that can unstake the principal
+    // Can only be changed by the owner of the contract or the current unstaker
+    function updatePrincipalUnstaker(
+        address newUnstaker,
+        uint256 stakingStoreIndex
+    ) external {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+				if (currentStore.principalUnstaker == address(0)) {
+					require(msg.sender == owner(), "Unstaker must be owner of the contract.");
+				} else if (currentStore.principalUnstaker != msg.sender)  {
+					revert("Function must be called by the principal unstaker of this stake.");
+				}
+        currentStore.principalUnstaker = newUnstaker;
     }
 
     // Request to unstake, the unstake period starts now.
@@ -148,9 +167,14 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     }
 
     // Unstake principal immediately
-    // Only possible for the principal admin
+    // Only possible for the principal unstaker or the global owner
     function unstakePrincipal(uint256 stakingStoreIndex) external onlyOwner {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+				if (currentStore.principalUnstaker == address(0)) {
+					require(msg.sender == owner(), "Unstaker must be owner of the contract.");
+				} else if (currentStore.principalUnstaker != msg.sender)  {
+					revert("Function must be called by the principal unstaker of this stake.");
+				}
         updateReward(stakingStoreIndex);
 
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
