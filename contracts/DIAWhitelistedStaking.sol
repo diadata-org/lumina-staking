@@ -12,7 +12,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     struct StakingStore {
         address beneficiary;
         address principalPayoutWallet;
-				address principalUnstaker;
+        address principalUnstaker;
         uint256 principal;
         uint256 reward;
         uint256 paidOutReward;
@@ -68,7 +68,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         address beneficiaryAddress,
         uint256 amount
     ) public {
-			  require(stakingWhitelist[beneficiaryAddress] == true, "Beneficiary must be in staking whitelist.");
+        require(stakingWhitelist[beneficiaryAddress] == true, "Beneficiary must be in staking whitelist.");
         uint256 minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 
         if (amount < minimumStake) {
@@ -88,9 +88,9 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
-				if (beneficiaryAddress == msg.sender) {
-					newStore.principalUnstaker = msg.sender;
-				}
+        if (beneficiaryAddress == msg.sender) {
+            newStore.principalUnstaker = msg.sender;
+        }
     }
 
     // Stake directly for message sender
@@ -115,11 +115,11 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         uint256 stakingStoreIndex
     ) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-				if (currentStore.principalUnstaker == address(0)) {
-					require(msg.sender == owner(), "Unstaker must be owner of the contract.");
-				} else if (currentStore.principalUnstaker != msg.sender)  {
-					revert("Function must be called by the principal unstaker of this stake.");
-				}
+        if (currentStore.principalUnstaker == address(0)) {
+            require(msg.sender == owner(), "Unstaker must be owner of the contract.");
+        } else if (currentStore.principalUnstaker != msg.sender)  {
+            revert("Function must be called by the principal unstaker of this stake.");
+        }
         currentStore.principalUnstaker = newUnstaker;
     }
 
@@ -170,11 +170,11 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     // Only possible for the principal unstaker or the global owner
     function unstakePrincipal(uint256 stakingStoreIndex) external onlyOwner {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-				if (currentStore.principalUnstaker == address(0)) {
-					require(msg.sender == owner(), "Unstaker must be owner of the contract.");
-				} else if (currentStore.principalUnstaker != msg.sender)  {
-					revert("Function must be called by the principal unstaker of this stake.");
-				}
+        if (currentStore.principalUnstaker == address(0)) {
+            require(msg.sender == owner(), "Unstaker must be owner of the contract.");
+        } else if (currentStore.principalUnstaker != msg.sender)  {
+            revert("Function must be called by the principal unstaker of this stake.");
+        }
         updateReward(stakingStoreIndex);
 
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
