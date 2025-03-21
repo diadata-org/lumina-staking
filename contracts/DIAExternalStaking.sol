@@ -15,6 +15,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     struct StakingStore {
         address beneficiary;
+        address principalPayoutWallet;
+        address principalUnstaker;
         uint256 principal;
         uint256 reward;
         uint256 stakingStartTime;
@@ -59,20 +61,36 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     // Stake
     function stake(uint256 amount) public {
+        return stakeForAddress(msg.sender, amount);
+    }
+
+    // Stake for a certain address
+    function stakeForAddress(
+        address beneficiaryAddress,
+        uint256 amount
+    ) public {
         uint256 minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
+
         if (amount < minimumStake) {
             revert AmountBelowMinimumStake(amount);
         }
-
         // Get the tokens into the staking contract
-        STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
+        STAKING_TOKEN.safeTransferFrom(
+            beneficiaryAddress,
+            address(this),
+            amount
+        );
 
         // Register tokens after transfer
         numStakers++;
         StakingStore storage newStore = stakingStores[numStakers];
-        newStore.beneficiary = msg.sender;
+        newStore.beneficiary = beneficiaryAddress;
+        newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
+        if (beneficiaryAddress == msg.sender) {
+            newStore.principalUnstaker = msg.sender;
+        }
     }
 
     // Request to unstake, the unstake period starts now.
@@ -112,14 +130,41 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 principalToSend = currentStore.principal;
         currentStore.principal = 0;
 
-        // Send tokens to beneficiary
-        STAKING_TOKEN.safeTransfer(currentStore.beneficiary, principalToSend);
+        // Send principal tokens to the payout wallet
+        STAKING_TOKEN.safeTransfer(currentStore.principalPayoutWallet, principalToSend);
 
+        // Send reward to the beneficiary
         STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
             rewardToSend
         );
+    }
+
+    // Update the wallet that will receive the principal
+    // Can only be changed by the owner of the contract
+    // TODO: Should the principalUnstaker also be allowed to change this?
+    function updatePrincipalPayoutWallet(
+        address newWallet,
+        uint256 stakingStoreIndex
+    ) external onlyOwner {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        currentStore.principalPayoutWallet = newWallet;
+    }
+
+    // Update the wallet that can unstake the principal
+    // Can only be changed by the owner of the contract or the current unstaker
+    function updatePrincipalUnstaker(
+        address newUnstaker,
+        uint256 stakingStoreIndex
+    ) external {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        if (currentStore.principalUnstaker == address(0)) {
+            require(msg.sender == owner(), "Unstaker must be owner of the contract.");
+        } else if (currentStore.principalUnstaker != msg.sender)  {
+            revert("Function must be called by the principal unstaker of this stake.");
+        }
+        currentStore.principalUnstaker = newUnstaker;
     }
 
     // Update unstaking duration, measured in seconds
