@@ -6,6 +6,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./DIARewardsDistribution.sol";
+import "forge-std/console.sol";
+
 
 contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
     using SafeERC20 for IERC20;
@@ -76,7 +78,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         }
         // Get the tokens into the staking contract
         stakingToken.safeTransferFrom(
-            beneficiaryAddress,
+            msg.sender,
             address(this),
             amount
         );
@@ -168,7 +170,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
 
     // Unstake principal immediately
     // Only possible for the principal unstaker or the global owner
-    function unstakePrincipal(uint256 stakingStoreIndex) external onlyOwner {
+    function unstakePrincipal(uint256 stakingStoreIndex) external  {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.principalUnstaker == address(0)) {
             require(msg.sender == owner(), "Unstaker must be owner of the contract.");

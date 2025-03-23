@@ -76,7 +76,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         }
         // Get the tokens into the staking contract
         STAKING_TOKEN.safeTransferFrom(
-            beneficiaryAddress,
+            msg.sender,
             address(this),
             amount
         );
