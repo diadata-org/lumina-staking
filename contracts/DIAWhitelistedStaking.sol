@@ -8,7 +8,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./DIARewardsDistribution.sol";
-import "forge-std/console.sol";
 
 /**
  * @title DIAWhitelistedStaking
@@ -33,7 +32,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
     uint256 public unstakingDuration;
 
     /// @notice ERC20 token used for staking.
-    IERC20 public STAKING_TOKEN;
+    IERC20 public immutable STAKING_TOKEN;
 
     /// @notice Total number of stakers.
     uint256 public numStakers;
