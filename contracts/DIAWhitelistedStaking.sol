@@ -5,6 +5,8 @@ pragma solidity 0.8.29;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
 import "./DIARewardsDistribution.sol";
 import "forge-std/console.sol";
 
@@ -12,7 +14,7 @@ import "forge-std/console.sol";
  * @title DIAWhitelistedStaking
  * @notice This contract allows whitelisted addresses to stake tokens and earn rewards.
  */
-contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
+contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGuard{
     using SafeERC20 for IERC20;
 
     /// @notice Structure representing staking details for a user.
@@ -87,7 +89,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         )
     {
         unstakingDuration = newUnstakingDuration;
-        stakingToken = IERC20(stakingTokenAddress);
+        STAKING_TOKEN = IERC20(stakingTokenAddress);
     }
 
     /**
@@ -217,7 +219,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
      * @dev Only possible for the principal unstaker or the global owner
      * @param stakingStoreIndex Index of the staking store.
      */
-    function unstakePrincipal(uint256 stakingStoreIndex) external {
+    function unstakePrincipal(uint256 stakingStoreIndex) external nonReentrant() {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         if (currentStore.principalUnstaker == address(0)) {
@@ -230,12 +232,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
 
-        // Send remaining reward tokens to beneficiary
-        STAKING_TOKEN.transferFrom(
-            rewardsWallet,
-            currentStore.beneficiary,
-            rewardToSend
-        );
+       
         currentStore.unstakingRequestTime = 0;
 
         // Pay out principal
@@ -244,6 +241,12 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         STAKING_TOKEN.transfer(
             currentStore.principalPayoutWallet,
             principalToSend
+        );
+         // Send remaining reward tokens to beneficiary
+        STAKING_TOKEN.transferFrom(
+            rewardsWallet,
+            currentStore.beneficiary,
+            rewardToSend
         );
     }
 
@@ -312,6 +315,8 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution {
         // Calculate number of full days that passed for staking store
         uint256 passedSeconds = block.timestamp - currentStore.stakingStartTime;
         uint256 passedDays = passedSeconds / (24 * 60 * 60);
+
+        
 
         return rewardRatePerDay * passedDays;
     }

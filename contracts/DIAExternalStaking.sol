@@ -67,14 +67,14 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      * @param _unstakingDuration Duration in seconds required before unstaking.
      * @param _stakingTokenAddress Address of the ERC20 token used for staking.
      * @param _rewardsWallet Address of the wallet that holds rewards.This wallet should appove tokens for this contract
-     * @param _rewardsWallet Rate at which rewards accumulate daily.
+     * @param _rewardRatePerDay Rate at which rewards accumulate daily.
      */
 
     constructor(
         uint256 _unstakingDuration,
         address _stakingTokenAddress,
         address _rewardsWallet,
-        uint256 _rewardsWallet
+        uint256 _rewardRatePerDay
     )
         Ownable(msg.sender)
         DIARewardsDistribution(
