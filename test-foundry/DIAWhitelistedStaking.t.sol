@@ -8,7 +8,11 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Mock ERC20 token for testing
 contract MockERC20 is ERC20 {
-    constructor(string memory name, string memory symbol, uint8 decimals) ERC20(name, symbol) {}
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint8 decimals
+    ) ERC20(name, symbol) {}
 
     function mint(address to, uint256 amount) public {
         _mint(to, amount);
@@ -21,51 +25,105 @@ contract DIAWhitelistedStakingTest is Test {
     IERC20 stakingToken;
     address owner = address(this);
     address user = address(0x123);
+    address user2 = address(0x222);
+
     address rewardsWallet = address(0x124);
 
-    uint256 constant STAKE_AMOUNT = 100 * 10**18;
-    uint256 constant INITIAL_USER_BALANCE = 1000 * 10**18;
-    uint256 constant INITIAL_CONTRACT_BALANCE = 1000 * 10**18;
+    uint256 constant STAKE_AMOUNT = 100 * 10 ** 18;
+    uint256 constant INITIAL_USER_BALANCE = 1000 * 10 ** 18;
+    uint256 constant INITIAL_CONTRACT_BALANCE = 1000 * 10 ** 18;
+
+    address[10] users;
 
     // Setup function for initializing contracts and balances
     function setUp() public {
         stakingToken = IERC20(address(new MockERC20("TestToken", "TT", 18)));
-        stakingContract = new DIAWhitelistedStaking(3 days, address(stakingToken), rewardsWallet, 100);
+        stakingContract = new DIAWhitelistedStaking(
+            3 days,
+            address(stakingToken),
+            rewardsWallet,
+            100
+        );
 
         deal(address(stakingToken), user, INITIAL_USER_BALANCE);
-        deal(address(stakingToken), rewardsWallet, 10000000 * 10**18);
-        deal(address(stakingToken), address(stakingContract), INITIAL_CONTRACT_BALANCE);
+        deal(address(stakingToken), owner, INITIAL_USER_BALANCE);
+
+        deal(address(stakingToken), rewardsWallet, 10000000 * 10 ** 18);
+        deal(
+            address(stakingToken),
+            address(stakingContract),
+            INITIAL_CONTRACT_BALANCE
+        );
+
+        for (uint i = 0; i < 10; i++) {
+            users[i] = address(uint160(i + 1));
+            deal(address(stakingToken), users[i], INITIAL_USER_BALANCE);
+        }
 
         vm.startPrank(rewardsWallet);
-        stakingToken.approve(address(stakingContract), 10000000 * 10**18);
+        stakingToken.approve(address(stakingContract), 10000000 * 10 ** 18);
+        vm.stopPrank();
     }
 
     // Helper function for staking tokens
     function stakeTokens(uint256 amount) internal {
+        vm.startPrank(owner);
+
+        stakingContract.addWhitelistedStaker(address(user));
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), amount);
         stakingContract.stake(amount);
         vm.stopPrank();
     }
 
+     function stakeForTokens(uint256 amount,address user) internal {
+
+        
+        vm.startPrank(owner);
+
+        stakingContract.addWhitelistedStaker(address(user));
+        stakingToken.approve(address(stakingContract), amount);
+        console.log("stakeforaddress");
+        
+        stakingContract.stakeForAddress(user,amount);
+        vm.stopPrank();
+    }
+
     // Test staking functionality
     function testStake() public {
         uint256 initialUserBalance = stakingToken.balanceOf(user);
-        uint256 initialContractBalance = stakingToken.balanceOf(address(stakingContract));
+        uint256 initialContractBalance = stakingToken.balanceOf(
+            address(stakingContract)
+        );
 
         stakeTokens(STAKE_AMOUNT);
 
         uint256 finalUserBalance = stakingToken.balanceOf(user);
-        uint256 finalContractBalance = stakingToken.balanceOf(address(stakingContract));
+        uint256 finalContractBalance = stakingToken.balanceOf(
+            address(stakingContract)
+        );
 
         // Ensure balances are updated correctly
-        assertEq(finalContractBalance, initialContractBalance + STAKE_AMOUNT, "Contract balance should increase");
-        assertEq(finalUserBalance, initialUserBalance - STAKE_AMOUNT, "User balance should decrease");
+        assertEq(
+            finalContractBalance,
+            initialContractBalance + STAKE_AMOUNT,
+            "Contract balance should increase"
+        );
+        assertEq(
+            finalUserBalance,
+            initialUserBalance - STAKE_AMOUNT,
+            "User balance should decrease"
+        );
 
         // Verify staking store
-        (address beneficiary, , uint256 principal, , , ,) = stakingContract.stakingStores(1);
+        (address beneficiary, , , uint256 principal, , , , ) = stakingContract
+            .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
-        assertEq(principal, STAKE_AMOUNT, "Principal should match the staked amount");
+        assertEq(
+            principal,
+            STAKE_AMOUNT,
+            "Principal should match the staked amount"
+        );
     }
 
     // Test unstaking request
@@ -73,7 +131,8 @@ contract DIAWhitelistedStakingTest is Test {
         testStake();
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
-        (, , , , , , uint256 unstakingRequestTime) = stakingContract.stakingStores(1);
+        (, , , , , , , uint256 unstakingRequestTime) = stakingContract
+            .stakingStores(1);
 
         console.log("Unstaking request time", unstakingRequestTime);
         // You may assert unstakingRequestTime here if needed
@@ -93,7 +152,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.stopPrank();
 
         // Verify reward is zero after unstake (no rewards accumulated in this test)
-        (, , , uint256 reward, , ,) = stakingContract.stakingStores(1);
+        (, , , , uint256 reward, , , ) = stakingContract.stakingStores(1);
         assertEq(reward, 0, "Reward should be zero after unstaking");
     }
 
@@ -119,7 +178,9 @@ contract DIAWhitelistedStakingTest is Test {
         // Fast-forward time by only 2 days (not enough to unstake)
         vm.warp(block.timestamp + 2 days);
 
-        vm.expectRevert(DIAWhitelistedStaking.UnstakingPeriodNotElapsed.selector);
+        vm.expectRevert(
+            DIAWhitelistedStaking.UnstakingPeriodNotElapsed.selector
+        );
         stakingContract.unstake(1);
     }
 
@@ -135,6 +196,39 @@ contract DIAWhitelistedStakingTest is Test {
 
     // Test full stake and unstake flow
     function testFullStakeAndUnstake() public {
+        stakeForTokens(STAKE_AMOUNT, user);
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+
+        // Fast-forward time by 4 days
+        vm.warp(block.timestamp + 4 days);
+
+        vm.startPrank(address(0x044));
+
+        stakingContract.unstake(1);
+        uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(
+            1
+        );
+
+        console.log("INITIAL_USER_BALANCE", INITIAL_USER_BALANCE);
+        console.log("rewardBeforeUnstake unstakePrincipal", rewardBeforeUnstake);
+
+        vm.expectRevert();
+        stakingContract.unstakePrincipal(1);
+
+        vm.stopPrank();
+
+        // Verify user balance is restored after unstake
+
+        assertEq(
+            stakingToken.balanceOf(user),
+            INITIAL_USER_BALANCE + rewardBeforeUnstake,
+            "User balance should be restored after unstake"
+        );
+    }
+
+
+       function testUnAuthorizedUnstake() public {
         testStake();
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
@@ -143,16 +237,286 @@ contract DIAWhitelistedStakingTest is Test {
         vm.warp(block.timestamp + 4 days);
 
         stakingContract.unstake(1);
+        uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(
+            1
+        );
+
+        console.log("INITIAL_USER_BALANCE", INITIAL_USER_BALANCE);
+        console.log("rewardBeforeUnstake unstakePrincipal", rewardBeforeUnstake);
+
+        vm.startPrank(address(0x001));
+
+vm.expectRevert(DIAWhitelistedStaking.NotPrincipalUnstaker.selector);
+        stakingContract.unstakePrincipal(1);
+
         vm.stopPrank();
-    uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(1);
-
-    console.log("INITIAL_USER_BALANCE",INITIAL_USER_BALANCE);
-    console.log("rewardBeforeUnstake",rewardBeforeUnstake);
-
 
         // Verify user balance is restored after unstake
- 
-        assertEq(stakingToken.balanceOf(user), INITIAL_USER_BALANCE  + rewardBeforeUnstake, "User balance should be restored after unstake");
 
+        
     }
+
+    // Helper function for staking tokens
+    function stakeTokensforUser(address u, uint256 amount) internal {
+        vm.startPrank(owner);
+        stakingContract.addWhitelistedStaker(u);
+        vm.startPrank(u);
+        stakingToken.approve(address(stakingContract), amount);
+        stakingContract.stake(amount);
+        vm.stopPrank();
+    }
+
+    function testMultipleStakeUnstakeUsers() public {
+        uint256 initialContractBalance = stakingToken.balanceOf(
+            address(stakingContract)
+        );
+
+        // Stake tokens for 10 users
+        for (uint i = 0; i < 10; i++) {
+            stakeTokensforUser(users[i], STAKE_AMOUNT);
+        }
+
+        // Check final contract balance and ensure it increased by the total amount staked by all users
+        uint256 finalContractBalance = stakingToken.balanceOf(
+            address(stakingContract)
+        );
+        uint256 totalStakedAmount = STAKE_AMOUNT * 10;
+
+        assertEq(
+            finalContractBalance,
+            initialContractBalance + totalStakedAmount,
+            "Contract balance should reflect total staking amount"
+        );
+
+        // Verify that each user has their staking store registered
+        for (uint i = 0; i < 10; i++) {
+            (
+                address beneficiary,
+                ,
+                ,
+                uint256 principal,
+                ,
+                ,
+                ,
+
+            ) = stakingContract.stakingStores(i + 1);
+            assertEq(
+                beneficiary,
+                users[i],
+                "Beneficiary should match the user"
+            );
+            assertEq(
+                principal,
+                STAKE_AMOUNT,
+                "Principal should match the staked amount"
+            );
+        }
+    }
+
+    function testDoubleUnstakeFails() public {
+        stakeTokens(STAKE_AMOUNT);
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+
+        // Fast-forward time by 4 days to surpass the unstaking period
+        vm.warp(block.timestamp + 4 days);
+
+        // First unstake should succeed
+        stakingContract.unstake(1);
+
+        // Attempt to unstake again should revert
+        vm.expectRevert();
+        stakingContract.unstake(1);
+    }
+
+    function testOwnerCanSetPrincipalUnstaker() public {
+    stakeTokens(STAKE_AMOUNT);
+
+    vm.startPrank(user);
+    stakingContract.updatePrincipalUnstaker(user2, 1);
+    vm.stopPrank();
+
+    (address beneficiary, address principalPayoutWallet, address principalUnstaker, uint256 principal, uint256 reward, uint256 paidOutReward, uint256 stakingStartTime, uint256 unstakingRequestTime) 
+        = stakingContract.stakingStores(1);
+
+    assertEq(principalUnstaker, user2, "Principal unstaker should be set by the owner.");
+}
+
+function testOnlyPrincipalUnstakerCanUpdate() public {
+    stakeForTokens(STAKE_AMOUNT,user);
+
+    // Owner sets the initial principal unstaker
+    vm.startPrank(owner);
+     stakingContract.updatePrincipalUnstaker(user, 1);
+    vm.stopPrank();
+
+    // The initial unstaker (user) successfully updates it to another address
+    vm.startPrank(user);
+ 
+    stakingContract.updatePrincipalUnstaker(address(0x5678), 1);
+    vm.stopPrank();
+
+    (address beneficiary, address principalPayoutWallet, address principalUnstaker, uint256 principal, uint256 reward, uint256 paidOutReward, uint256 stakingStartTime, uint256 unstakingRequestTime) 
+        = stakingContract.stakingStores(1);
+
+    assertEq(principalUnstaker, address(0x5678), "Principal unstaker should be updated by the previous unstaker.");
+}
+
+function testNonOwnerCannotSetInitialPrincipalUnstaker() public {
+    stakeTokens(STAKE_AMOUNT);
+    vm.startPrank(address(0x5678));
+
+       vm.expectRevert(
+            DIAWhitelistedStaking.NotPrincipalUnstaker.selector
+        );
+    stakingContract.updatePrincipalUnstaker(user, 1);
+    vm.stopPrank();
+}
+
+ 
+
+ 
+
+function testUpdatePrincipalPayoutWallet() public {
+    stakeTokens(STAKE_AMOUNT);
+
+    address newPayoutWallet = address(0x9876);
+
+    // Ensure only the principal unstaker can update
+    vm.startPrank(owner);
+    stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
+    vm.stopPrank();
+
+    (, address principalPayoutWallet, , ,,, , ) = stakingContract.stakingStores(1);
+
+    assertEq(principalPayoutWallet, newPayoutWallet, "Principal payout wallet should be updated correctly.");
+}
+
+function testRequestUnstakeNotBeneficiary() public {
+    stakeTokens(STAKE_AMOUNT); // Stake on behalf of `user`
+
+    // Attempt unstake from `user2`, who is not the beneficiary
+    vm.startPrank(user2);
+    vm.expectRevert(DIAWhitelistedStaking.NotBeneficiary.selector);
+    stakingContract.requestUnstake(1);
+    vm.stopPrank();
+}
+
+function testRequestUnstakeAlreadyRequested() public {
+    stakeTokens(STAKE_AMOUNT); // Stake on behalf of `user`
+
+    vm.startPrank(user);
+    stakingContract.requestUnstake(1); // First request should succeed
+
+    // Second request should fail
+    vm.expectRevert(DIAWhitelistedStaking.AlreadyRequestedUnstake.selector);
+    stakingContract.requestUnstake(1);
+    vm.stopPrank();
+}
+
+function testRemoveWhitelistedStakerNotWhitelisted() public {
+    vm.startPrank(owner);
+
+    // Attempt to remove a non-whitelisted staker
+    vm.expectRevert(DIAWhitelistedStaking.NotWhitelisted.selector);
+    stakingContract.removeWhitelistedStaker(user);
+
+    vm.stopPrank();
+}
+
+function testRemoveWhitelistedStaker() public {
+    vm.startPrank(owner);
+
+    // Add user to the whitelist first
+    stakingContract.addWhitelistedStaker(user);
+    assertEq(stakingContract.stakingWhitelist(user), true, "User should be whitelisted");
+
+    // Remove the user from whitelist
+    stakingContract.removeWhitelistedStaker(user);
+    assertEq(stakingContract.stakingWhitelist(user), false, "User should be removed from whitelist");
+
+    vm.stopPrank();
+}
+
+function testSetUnstakingDurationTooShort() public {
+    vm.startPrank(owner);
+
+    // Attempt to set duration less than 1 day
+    vm.expectRevert(DIAWhitelistedStaking.UnstakingDurationTooShort.selector);
+    stakingContract.setUnstakingDuration(0.5 days);
+
+    vm.stopPrank();
+}
+
+function testSetUnstakingDurationTooLong() public {
+    vm.startPrank(owner);
+
+    // Attempt to set duration more than 20 days
+    vm.expectRevert(DIAWhitelistedStaking.UnstakingDurationTooLong.selector);
+    stakingContract.setUnstakingDuration(21 days);
+
+    vm.stopPrank();
+}
+
+function testSetUnstakingDurationValid() public {
+    vm.startPrank(owner);
+
+    // Set a valid duration and verify it updates correctly
+    uint256 newDuration = 10 days;
+    stakingContract.setUnstakingDuration(newDuration);
+    assertEq(stakingContract.unstakingDuration(), newDuration, "Unstaking duration should be updated");
+
+    vm.stopPrank();
+}
+
+function testAddWhitelistedStakerAlreadyWhitelisted() public {
+    vm.startPrank(owner);
+
+    // First time adding should succeed
+    stakingContract.addWhitelistedStaker(user);
+    assertEq(stakingContract.stakingWhitelist(user), true, "User should be whitelisted");
+
+    // Attempting to add again should revert
+    vm.expectRevert(DIAWhitelistedStaking.AlreadyWhitelisted.selector);
+    stakingContract.addWhitelistedStaker(user);
+
+    vm.stopPrank();
+}
+
+function testUpdateRewardRate() public {
+    vm.startPrank(owner);
+
+    // First time adding should succeed
+    stakingContract.updateRewardRatePerDay(12);
+ 
+   
+
+    vm.stopPrank();
+}
+
+function testUpdateRewardWallet() public {
+    vm.startPrank(owner);
+
+    // First time adding should succeed
+    stakingContract.updateRewardsWallet(address(0x123));
+ 
+   
+
+    vm.stopPrank();
+}
+
+function testUpdateZeroRewardWallet() public {
+    vm.startPrank(owner);
+
+    // First time adding should succeed
+    vm.expectRevert();
+    stakingContract.updateRewardsWallet(address(0x00));
+ 
+   
+
+    vm.stopPrank();
+}
+
+
+ 
 }

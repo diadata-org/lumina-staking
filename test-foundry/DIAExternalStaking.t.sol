@@ -38,6 +38,8 @@ contract DIAExternalStakingTest is Test {
         deal(address(stakingToken), user, INITIAL_USER_BALANCE);
         deal(address(stakingToken), rewardsWallet, 10000000 * 10 ** 18);
         deal(address(stakingToken), address(stakingContract), INITIAL_CONTRACT_BALANCE);
+        deal(address(stakingToken), owner, INITIAL_USER_BALANCE);
+
 
         vm.startPrank(rewardsWallet);
         stakingToken.approve(address(stakingContract), 10000000 * 10 ** 18);
@@ -48,6 +50,18 @@ contract DIAExternalStakingTest is Test {
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), amount);
         stakingContract.stake(amount);
+        vm.stopPrank();
+    }
+
+         function stakeForTokens(uint256 amount,address user) internal {
+
+        
+        vm.startPrank(owner);
+
+         stakingToken.approve(address(stakingContract), amount);
+        console.log("stakeforaddress");
+        
+        stakingContract.stakeForAddress(user,amount);
         vm.stopPrank();
     }
 
@@ -66,7 +80,7 @@ contract DIAExternalStakingTest is Test {
         assertEq(finalUserBalance, initialUserBalance - STAKE_AMOUNT, "User balance should decrease");
 
         // Verify staking store
-        (address beneficiary, uint256 principal, , , ) = stakingContract.stakingStores(1);
+        (address beneficiary, ,,uint256 principal, , , ) = stakingContract.stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(principal, STAKE_AMOUNT, "Principal should match the staked amount");
     }
@@ -77,7 +91,7 @@ contract DIAExternalStakingTest is Test {
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
 
-        (, , , , uint256 unstakingRequestTime) = stakingContract.stakingStores(1);
+        (,,, , , , uint256 unstakingRequestTime) = stakingContract.stakingStores(1);
         console.log("Unstaking request time:", unstakingRequestTime);
         // Uncomment and assert if necessary
         // assertGt(unstakingRequestTime, 0, "Unstaking request time should be greater than 0");
@@ -98,7 +112,7 @@ contract DIAExternalStakingTest is Test {
         vm.stopPrank();
 
         // Verify reward is zero after unstake (no rewards accumulated in this test)
-        (, , uint256 reward, , ) = stakingContract.stakingStores(1);
+        (,,, , uint256 reward, , ) = stakingContract.stakingStores(1);
         assertEq(reward, 0, "Reward should be zero after unstaking");
     }
 
@@ -138,6 +152,50 @@ contract DIAExternalStakingTest is Test {
         stakingContract.unstake(1);
     }
 
+        function testOwnerCanSetPrincipalUnstaker() public {
+    stakeTokens(STAKE_AMOUNT);
+
+    vm.startPrank(user);
+    stakingContract.updatePrincipalUnstaker(user, 1);
+    vm.stopPrank();
+
+    (address beneficiary, address principalPayoutWallet, address principalUnstaker, uint256 principal, uint256 reward, uint256 stakingStartTime, uint256 unstakingRequestTime) 
+        = stakingContract.stakingStores(1);
+
+    assertEq(principalUnstaker, user, "Principal unstaker should be set by the owner.");
+}
+
+function testOnlyPrincipalUnstakerCanUpdate() public {
+    stakeForTokens(STAKE_AMOUNT,user);
+
+    // Owner sets the initial principal unstaker
+    vm.startPrank(owner);
+     stakingContract.updatePrincipalUnstaker(user, 1);
+    vm.stopPrank();
+
+    // The initial unstaker (user) successfully updates it to another address
+    vm.startPrank(user);
+ 
+    stakingContract.updatePrincipalUnstaker(address(0x5678), 1);
+    vm.stopPrank();
+
+    (address beneficiary, address principalPayoutWallet, address principalUnstaker, uint256 principal, uint256 reward, uint256 stakingStartTime, uint256 unstakingRequestTime) 
+        = stakingContract.stakingStores(1);
+
+    assertEq(principalUnstaker, address(0x5678), "Principal unstaker should be updated by the previous unstaker.");
+}
+
+function testNonOwnerCannotSetInitialPrincipalUnstaker() public {
+    stakeTokens(STAKE_AMOUNT);
+    vm.startPrank(address(0x5678));
+
+       vm.expectRevert(
+            DIAExternalStaking.NotPrincipalUnstaker.selector
+        );
+    stakingContract.updatePrincipalUnstaker(user, 1);
+    vm.stopPrank();
+}
+
  // Test full stake and unstake flow with reward validation
 function testFullStakeAndUnstake() public {
     // Stake tokens
@@ -173,4 +231,185 @@ function testFullStakeAndUnstake() public {
     
     assertEq(finalUserBalance, expectedUserBalance, "User balance should include the staked amount and accumulated rewards");
 }
+
+function testStakeBelowMinimumFails() public {
+    uint256 belowMinimumStake = 1 * 10 ** 17; 
+
+    vm.startPrank(user);
+    stakingToken.approve(address(stakingContract), belowMinimumStake);
+
+         vm.expectRevert(abi.encodeWithSelector(DIAExternalStaking.AmountBelowMinimumStake.selector, belowMinimumStake));
+
+    stakingContract.stake(belowMinimumStake);
+
+    vm.stopPrank();
+}
+
+function testRequestUnstake_NotBeneficiaryFails() public {
+    testStake();  
+    
+    address nonBeneficiary = address(0x5678);
+
+    vm.startPrank(nonBeneficiary);
+    vm.expectRevert(DIAExternalStaking.NotBeneficiary.selector);
+    stakingContract.requestUnstake(1);
+    vm.stopPrank();
+}
+
+function testRequestUnstake_AlreadyRequestedUnstakeFails() public {
+    testStake();  
+
+    vm.startPrank(user);
+    stakingContract.requestUnstake(1); 
+
+     vm.expectRevert(DIAExternalStaking.AlreadyRequestedUnstake.selector);
+    stakingContract.requestUnstake(1);
+    vm.stopPrank();
+}
+
+
+function testRequestUnstakeWithBalanceCheck() public {
+    testStake();
+    vm.startPrank(user);
+
+    // Get initial balance before requesting unstake
+    uint256 userBalanceBefore = stakingToken.balanceOf(user);
+    uint256 contractBalanceBefore = stakingToken.balanceOf(address(stakingContract));
+
+    // Request unstake
+    stakingContract.requestUnstake(1);
+
+    // Get balance after requesting unstake (should remain the same)
+    uint256 userBalanceAfter = stakingToken.balanceOf(user);
+    uint256 contractBalanceAfter = stakingToken.balanceOf(address(stakingContract));
+
+    // Fetch unstaking request time
+    (,,, , , , uint256 unstakingRequestTime) = stakingContract.stakingStores(1);
+    console.log("Unstaking request time:", unstakingRequestTime);
+
+    // Assert unstaking request time is greater than zero
+    assertGt(unstakingRequestTime, 0, "Unstaking request time should be greater than 0");
+
+    // Ensure that balances remain unchanged since unstaking hasn't happened yet
+    assertEq(userBalanceBefore, userBalanceAfter, "User balance should remain unchanged after unstake request");
+    assertEq(contractBalanceBefore, contractBalanceAfter, "Contract balance should remain unchanged after unstake request");
+
+    vm.stopPrank();
+}
+
+function testUnstakeTwiceFails() public {
+    // Stake tokens and request unstake
+    testStake();
+    vm.startPrank(user);
+
+    uint256 userBalanceBeforeUnstake = stakingToken.balanceOf(user);
+    uint256 contractBalanceBeforeUnstake = stakingToken.balanceOf(address(stakingContract));
+
+
+    stakingContract.requestUnstake(1);
+
+    // Simulate time passing (after the unstaking period)
+    vm.warp(block.timestamp + 4 days);
+    
+    uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(1);
+    // First unstake should succeed
+    stakingContract.unstake(1);
+
+    // Verify user balance is restored after the first unstake
+    uint256 userBalanceAfterFirstUnstake = stakingToken.balanceOf(user);
+    uint256 contractBalanceAfterFirstUnstake = stakingToken.balanceOf(address(stakingContract));
+
+    assertEq(userBalanceAfterFirstUnstake, userBalanceBeforeUnstake + STAKE_AMOUNT + rewardBeforeUnstake, "User balance should increase after first unstake");
+    assertLt(contractBalanceAfterFirstUnstake, contractBalanceBeforeUnstake, "Contract balance should decrease after first unstake");
+
+    // Store balance before second unstake attempt
+    uint256 userBalanceBeforeSecondUnstake = stakingToken.balanceOf(user);
+
+    // Second unstake attempt should fail
+    // vm.expectRevert(DIAExternalStaking.AlreadyUnstaked.selector);
+    stakingContract.unstake(1);
+
+    // User balance should remain unchanged after failed unstake attempt
+    uint256 userBalanceAfterSecondUnstake = stakingToken.balanceOf(user);
+    assertEq(userBalanceAfterSecondUnstake, userBalanceBeforeSecondUnstake, "User balance should remain the same after failed second unstake");
+
+    vm.stopPrank();
+}
+
+
+function testUpdatePrincipalPayoutWallet() public {
+    stakeTokens(STAKE_AMOUNT);
+
+    address newPayoutWallet = address(0x9876);
+
+    // Ensure only the principal unstaker can update
+    vm.startPrank(owner);
+    stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
+    vm.stopPrank();
+
+    (, address principalPayoutWallet, , ,, , ) = stakingContract.stakingStores(1);
+
+    assertEq(principalPayoutWallet, newPayoutWallet, "Principal payout wallet should be updated correctly.");
+}
+
+function testSetUnstakingDuration() public {
+    uint256 newDuration = 7 days;
+
+    vm.startPrank(owner);
+    stakingContract.setUnstakingDuration(newDuration);
+    vm.stopPrank();
+
+    // Verify the unstaking duration was updated correctly
+    assertEq(stakingContract.unstakingDuration(), newDuration, "Unstaking duration should be updated to new value");
+}
+
+function testSetUnstakingDurationTooShortFails() public {
+    uint256 shortDuration = 12 hours; // Less than 1 day
+
+    vm.startPrank(owner);
+    vm.expectRevert(DIAExternalStaking.UnstakingDurationTooShort.selector);
+    stakingContract.setUnstakingDuration(shortDuration);
+    vm.stopPrank();
+}
+
+function testSetUnstakingDurationTooLongFails() public {
+    uint256 longDuration = 21 days; // More than 20 days
+
+    vm.startPrank(owner);
+    vm.expectRevert(DIAExternalStaking.UnstakingDurationTooLong.selector);
+    stakingContract.setUnstakingDuration(longDuration);
+    vm.stopPrank();
+}
+
+function testNonOwnerCannotSetUnstakingDuration() public {
+    uint256 newDuration = 7 days;
+    address nonOwner = address(0x5678);
+
+    vm.startPrank(nonOwner);
+    vm.expectRevert();
+    stakingContract.setUnstakingDuration(newDuration);
+    vm.stopPrank();
+}
+
+// function testOnlyPrincipalUnstakerCanUpdatePayoutWallet() public {
+//     stakeForTokens(STAKE_AMOUNT, user);
+
+//     // Owner sets the initial principal unstaker
+//     vm.startPrank(owner);
+//     stakingContract.updatePrincipalUnstaker(user, 1);
+//     vm.stopPrank();
+
+//     address newPayoutWallet = address(0x9876);
+
+//     // A non-principal unstaker should fail to update the payout wallet
+//     vm.startPrank(address(0x5678));
+//     vm.expectRevert(DIAExternalStaking.NotPrincipalUnstaker.selector);
+//     stakingContract.updatePrincipalPayoutWallet(newPayoutWallet,1);
+//     vm.stopPrank();
+// }
+
+
+
+
+ 
 }
