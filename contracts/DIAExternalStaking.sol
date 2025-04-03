@@ -8,11 +8,24 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 import "./DIARewardsDistribution.sol";
 
+/**
+ * @title DIAExternalStaking
+ * @notice This contract allows to stake tokens and earn rewards.
+ */
 contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     using SafeERC20 for IERC20;
 
+    /// @notice Emitted when a UnstakeDuration is changed.
     event UnstakingDurationUpdated(uint256 oldDuration, uint256 newDuration);
 
+    /// @notice Emitted when a Principal Payout Wallet is changed.
+    event PrincipalPayoutWalletUpdated(
+        address oldWallet,
+        address newWallet,
+        uint256 stakingStoreIndex
+    );
+
+    /// @notice Structure representing staking details for a user.
     struct StakingStore {
         address beneficiary;
         address principalPayoutWallet;
@@ -23,15 +36,19 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 unstakingRequestTime;
     }
 
-    // How long (in seconds) for unstaking to take place
+    /// @notice How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 
+    /// @notice ERC20 token used for staking.
     IERC20 public immutable STAKING_TOKEN;
 
+    /// @notice Total number of stakers.
     uint256 public numStakers;
 
+    /// @notice Mapping of staking index to corresponding staking store.
     mapping(uint256 => StakingStore) public stakingStores;
 
+    /// @notice Errors
     error NotBeneficiary();
     error AlreadyRequestedUnstake();
     error UnstakingNotRequested();
@@ -42,11 +59,22 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     error AmountBelowMinimumStake(uint256 amount);
 
+    error NotOwner();
+    error NotPrincipalUnstaker();
+
+    /**
+     * @dev Initializes the contract with staking parameters.
+     * @param _unstakingDuration Duration in seconds required before unstaking.
+     * @param _stakingTokenAddress Address of the ERC20 token used for staking.
+     * @param _rewardsWallet Address of the wallet that holds rewards.This wallet should appove tokens for this contract
+     * @param _rewardsWallet Rate at which rewards accumulate daily.
+     */
+
     constructor(
         uint256 _unstakingDuration,
         address _stakingTokenAddress,
         address _rewardsWallet,
-        uint256 _rewardRatePerDay
+        uint256 _rewardsWallet
     )
         Ownable(msg.sender)
         DIARewardsDistribution(
@@ -59,12 +87,19 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
     }
 
-    // Stake
+    /**
+     * @notice Allows a user to stake tokens directly.
+     * @param amount The amount of tokens to stake.
+     */
     function stake(uint256 amount) public {
         return stakeForAddress(msg.sender, amount);
     }
 
-    // Stake for a certain address
+    /**
+     * @notice Stakes tokens on behalf of a given address.
+     * @param beneficiaryAddress Address receiving the staking rewards.
+     * @param amount Amount of tokens to be staked.
+     */
     function stakeForAddress(
         address beneficiaryAddress,
         uint256 amount
@@ -75,11 +110,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
             revert AmountBelowMinimumStake(amount);
         }
         // Get the tokens into the staking contract
-        STAKING_TOKEN.safeTransferFrom(
-            msg.sender,
-            address(this),
-            amount
-        );
+        STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
 
         // Register tokens after transfer
         numStakers++;
@@ -93,8 +124,11 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         }
     }
 
-    // Request to unstake, the unstake period starts now.
-    // This can only be requested once.
+    /**
+     * @notice Requests unstaking, starting the waiting period.
+     * @dev Can only be called by the beneficiary.
+     * @param stakingStoreIndex Index of the staking store.
+     */
     function requestUnstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
@@ -109,6 +143,10 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         currentStore.unstakingRequestTime = block.timestamp;
     }
 
+    /**
+     * @notice Completes the unstaking process after the required duration.
+     * @param stakingStoreIndex Index of the staking store.
+     */
     function unstake(uint256 stakingStoreIndex) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
@@ -131,7 +169,10 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         currentStore.principal = 0;
 
         // Send principal tokens to the payout wallet
-        STAKING_TOKEN.safeTransfer(currentStore.principalPayoutWallet, principalToSend);
+        STAKING_TOKEN.safeTransfer(
+            currentStore.principalPayoutWallet,
+            principalToSend
+        );
 
         // Send reward to the beneficiary
         STAKING_TOKEN.safeTransferFrom(
@@ -141,33 +182,52 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         );
     }
 
-    // Update the wallet that will receive the principal
-    // Can only be changed by the owner of the contract
     // TODO: Should the principalUnstaker also be allowed to change this?
+
+    /**
+     * @notice Updates the principal payout wallet for a given staking index.
+     * @dev Only callable by the contract owner.
+     * @param newWallet New wallet address for receiving the principal.
+     * @param stakingStoreIndex Index of the staking store.
+     */
     function updatePrincipalPayoutWallet(
         address newWallet,
         uint256 stakingStoreIndex
     ) external onlyOwner {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        emit PrincipalPayoutWalletUpdated(
+            currentStore.principalPayoutWallet,
+            newWallet,
+            stakingStoreIndex
+        );
         currentStore.principalPayoutWallet = newWallet;
     }
 
-    // Update the wallet that can unstake the principal
-    // Can only be changed by the owner of the contract or the current unstaker
+    /**
+     * @notice Allows the contract owner or the current unstaker to update the unstaker.
+     * @param newUnstaker New address allowed to unstake the principal.
+     * @param stakingStoreIndex Index of the staking store.
+     */
     function updatePrincipalUnstaker(
         address newUnstaker,
         uint256 stakingStoreIndex
     ) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.principalUnstaker == address(0)) {
-            require(msg.sender == owner(), "Unstaker must be owner of the contract.");
-        } else if (currentStore.principalUnstaker != msg.sender)  {
-            revert("Function must be called by the principal unstaker of this stake.");
+            if (msg.sender != owner()) revert NotOwner();
+        } else if (currentStore.principalUnstaker != msg.sender) {
+            revert NotPrincipalUnstaker();
         }
         currentStore.principalUnstaker = newUnstaker;
     }
 
-    // Update unstaking duration, measured in seconds
+    /**
+     * @notice Updates the duration required before unstaking can be completed.
+     * @dev Only callable by the contract owner.
+     * @param newDuration The new unstaking duration, in seconds.
+     * @custom:revert UnstakingDurationTooShort() if the new duration is less than 1 day.
+     * @custom:revert UnstakingDurationTooLong() if the new duration exceeds 20 days.
+     */
     function setUnstakingDuration(uint256 newDuration) external onlyOwner {
         if (newDuration < 1 days) {
             revert UnstakingDurationTooShort();
@@ -181,6 +241,12 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         unstakingDuration = newDuration;
     }
 
+    /**
+     * @notice Calculates the accrued reward for a given staking store.
+     * @dev The reward is calculated based on the number of full days passed since staking started.
+     * @param stakingStoreIndex The index of the staking store.
+     * @return The total reward accumulated so far.
+     */
     function getRewardForStakingStore(
         uint256 stakingStoreIndex
     ) public view override returns (uint256) {
@@ -199,7 +265,12 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         return accumulatedReward - currentStore.principal;
     }
 
-    // Calculate and store reward for the staker
+    /**
+     * @notice Updates the reward amount for a given staking store.
+     * @dev Ensures the reward does not decrease.
+     * @param stakingStoreIndex The index of the staking store.
+     * @custom:assert The newly calculated reward must be greater than or equal to the current reward.
+     */
     function updateReward(uint256 stakingStoreIndex) public {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
