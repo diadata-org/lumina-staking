@@ -36,6 +36,10 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 unstakingRequestTime;
     }
 
+    /// @notice How many tokens can be staked in total
+    uint256 public stakingLimit;
+    uint256 public tokensStaked;
+
     /// @notice How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 
@@ -58,6 +62,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     error UnstakingDurationTooLong();
 
     error AmountBelowMinimumStake(uint256 amount);
+    error AmountAboveStakingLimit(uint256 amount);
 
     error NotOwner();
     error NotPrincipalUnstaker();
@@ -74,7 +79,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 _unstakingDuration,
         address _stakingTokenAddress,
         address _rewardsWallet,
-        uint256 _rewardRatePerDay
+        uint256 _rewardRatePerDay,
+        uint256 _stakingLimit
     )
         Ownable(msg.sender)
         DIARewardsDistribution(
@@ -85,6 +91,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     {
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
+        stakingLimit = _stakingLimit;
     }
 
     /**
@@ -109,6 +116,9 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         if (amount < minimumStake) {
             revert AmountBelowMinimumStake(amount);
         }
+        if (amount > (stakingLimit - tokensStaked)) {
+            revert AmountAboveStakingLimit(amount);
+        }
         // Get the tokens into the staking contract
         STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
 
@@ -122,6 +132,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         if (beneficiaryAddress == msg.sender) {
             newStore.principalUnstaker = msg.sender;
         }
+        tokensStaked += amount;
     }
 
     /**
