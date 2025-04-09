@@ -191,19 +191,20 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         );
     }
 
-    // TODO: Should the principalUnstaker also be allowed to change this?
-
     /**
      * @notice Updates the principal payout wallet for a given staking index.
-     * @dev Only callable by the contract owner.
+     * @dev Only callable by the principal unstaker.
      * @param newWallet New wallet address for receiving the principal.
      * @param stakingStoreIndex Index of the staking store.
      */
     function updatePrincipalPayoutWallet(
         address newWallet,
         uint256 stakingStoreIndex
-    ) external onlyOwner {
+    ) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        if (currentStore.principalUnstaker != msg.sender) {
+            revert NotPrincipalUnstaker();
+        }
         emit PrincipalPayoutWalletUpdated(
             currentStore.principalPayoutWallet,
             newWallet,
