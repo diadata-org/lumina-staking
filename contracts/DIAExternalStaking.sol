@@ -129,9 +129,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
-        if (beneficiaryAddress == msg.sender) {
-            newStore.principalUnstaker = msg.sender;
-        }
+        newStore.principalUnstaker = msg.sender;
         tokensStaked += amount;
     }
 
@@ -224,9 +222,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 stakingStoreIndex
     ) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        if (currentStore.principalUnstaker == address(0)) {
-            if (msg.sender != owner()) revert NotOwner();
-        } else if (currentStore.principalUnstaker != msg.sender) {
+        if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
         currentStore.principalUnstaker = newUnstaker;
@@ -264,7 +260,12 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         // Calculate number of full days that passed for staking store
-        uint256 passedSeconds = block.timestamp - currentStore.stakingStartTime;
+        uint256 passedSeconds;
+        if (currentStore.unstakingRequestTime > 0) {
+            currentStore.unstakingRequestTime - currentStore.stakingStartTime;
+        } else {
+            passedSeconds = block.timestamp - currentStore.stakingStartTime;
+        }
 
         uint256 passedDays = passedSeconds / (24 * 60 * 60);
 

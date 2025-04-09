@@ -118,9 +118,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
         newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
-        if (beneficiaryAddress == msg.sender) {
-            newStore.principalUnstaker = msg.sender;
-        }
+        newStore.principalUnstaker = msg.sender;
     }
 
     /**
@@ -146,7 +144,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
     }
 
     /**
-     * @notice Allows the contract owner or the current unstaker to update the unstaker.
+     * @notice Allows the current unstaker to update the unstaker.
      * @param newUnstaker New address allowed to unstake the principal.
      * @param stakingStoreIndex Index of the staking store.
      */
@@ -155,9 +153,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
         uint256 stakingStoreIndex
     ) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        if (currentStore.principalUnstaker == address(0)) {
-            if (msg.sender != owner()) revert NotOwner();
-        } else if (currentStore.principalUnstaker != msg.sender) {
+        if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
         currentStore.principalUnstaker = newUnstaker;
@@ -221,9 +217,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
     function unstakePrincipal(uint256 stakingStoreIndex) external nonReentrant() {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        if (currentStore.principalUnstaker == address(0)) {
-            if (msg.sender != owner()) revert NotOwner();
-        } else if (currentStore.principalUnstaker != msg.sender) {
+        if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
         updateReward(stakingStoreIndex);
