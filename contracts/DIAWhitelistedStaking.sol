@@ -306,7 +306,12 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         // Calculate number of full days that passed for staking store
-        uint256 passedSeconds = block.timestamp - currentStore.stakingStartTime;
+        uint256 passedSeconds;
+        if (currentStore.unstakingRequestTime > 0) {
+            currentStore.unstakingRequestTime - currentStore.stakingStartTime;
+        } else {
+            passedSeconds = block.timestamp - currentStore.stakingStartTime;
+        }
         uint256 passedDays = passedSeconds / (24 * 60 * 60);
 
         
