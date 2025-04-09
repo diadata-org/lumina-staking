@@ -231,12 +231,12 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
         // Pay out principal
         uint256 principalToSend = currentStore.principal;
         currentStore.principal = 0;
-        STAKING_TOKEN.transfer(
+        STAKING_TOKEN.safeTransfer(
             currentStore.principalPayoutWallet,
             principalToSend
         );
          // Send remaining reward tokens to beneficiary
-        STAKING_TOKEN.transferFrom(
+        STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
             rewardToSend
