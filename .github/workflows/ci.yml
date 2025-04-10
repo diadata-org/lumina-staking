@@ -19,6 +19,9 @@ jobs:
         with:
           version: nightly
 
+      - name: Install Foundry dependencies
+        run: forge install OpenZeppelin/openzeppelin-contracts --no-commit
+
       - name: Run Forge Tests
         run: forge test --ffi -vvv
 
