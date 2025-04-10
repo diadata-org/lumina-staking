@@ -21,7 +21,7 @@ jobs:
         run: forge install
       
       - name: Install OpenZeppelin Contracts
-        run: forge install OpenZeppelin/openzeppelin-contracts
+        run: forge install OpenZeppelin/openzeppelin-contracts --no-commit
 
       - name: Run Forge tests
         run: forge test --ffi -vvv
