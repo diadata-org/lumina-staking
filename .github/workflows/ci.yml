@@ -19,6 +19,9 @@ jobs:
 
       - name: Install Foundry dependencies
         run: forge install
+      
+      - name: Install OpenZeppelin Contracts
+        run: forge install OpenZeppelin/openzeppelin-contracts
 
       - name: Run Forge tests
         run: forge test --ffi -vvv
