@@ -448,7 +448,13 @@ function testSplitStakeAndUnstake() public {
 
     // Store the current reward balance before unstaking
     uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(1);
-    uint256 userRewards = (rewardBeforeUnstake*60/100) ;// 50% of rewards
+
+    console.log("Total Rewards",rewardBeforeUnstake);
+
+    uint256 userRewards = (rewardBeforeUnstake*96/100) ;// 96% of rewards
+
+    console.log("96% Rewards",userRewards);
+
 
     // Unstake tokens
     stakingContract.unstake(1);

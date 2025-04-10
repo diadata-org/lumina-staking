@@ -184,9 +184,9 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 principalToSend = currentStore.principal;
         currentStore.principal = 0;
 
-        uint256 principalWalletReward = (rewardToSend * currentStore.principalWalletShare) / 10;
+        uint256 principalWalletReward = (rewardToSend * currentStore.principalWalletShare) / 100;
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
-         if (principalWalletReward > 0) {
+        if (principalWalletReward > 0) {
         STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.principalPayoutWallet,
