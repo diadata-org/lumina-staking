@@ -7,6 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./DIARewardsDistribution.sol";
+ 
 
 /**
  * @title DIAExternalStaking
@@ -34,6 +35,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 reward;
         uint256 stakingStartTime;
         uint256 unstakingRequestTime;
+        uint256 principalWalletShare;
+
     }
 
     /// @notice How many tokens can be staked in total
@@ -98,8 +101,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      * @notice Allows a user to stake tokens directly.
      * @param amount The amount of tokens to stake.
      */
-    function stake(uint256 amount) public {
-        return stakeForAddress(msg.sender, amount);
+    function stake(uint256 amount, uint256 principalWalletShare) public {
+        return stakeForAddress(msg.sender, amount,principalWalletShare);
     }
 
     /**
@@ -109,7 +112,8 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      */
     function stakeForAddress(
         address beneficiaryAddress,
-        uint256 amount
+        uint256 amount,
+        uint256 principalWalletShare
     ) public {
         uint256 minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 
@@ -130,6 +134,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
         newStore.principalUnstaker = msg.sender;
+        newStore.principalWalletShare = principalWalletShare;
         tokensStaked += amount;
     }
 
@@ -172,10 +177,23 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
 
+        
+
         uint256 rewardToSend = currentStore.reward;
         currentStore.reward = 0;
         uint256 principalToSend = currentStore.principal;
         currentStore.principal = 0;
+
+        uint256 principalWalletReward = (rewardToSend * currentStore.principalWalletShare) / 10;
+        uint256 beneficiaryReward = rewardToSend - principalWalletReward;
+         if (principalWalletReward > 0) {
+        STAKING_TOKEN.safeTransferFrom(
+            rewardsWallet,
+            currentStore.principalPayoutWallet,
+            principalWalletReward
+        );
+    }
+
 
         // Send principal tokens to the payout wallet
         STAKING_TOKEN.safeTransfer(
@@ -187,7 +205,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
-            rewardToSend
+            beneficiaryReward
         );
     }
 
@@ -263,10 +281,11 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         // Calculate number of full days that passed for staking store
         uint256 passedSeconds;
         if (currentStore.unstakingRequestTime > 0) {
-            currentStore.unstakingRequestTime - currentStore.stakingStartTime;
+            passedSeconds = currentStore.unstakingRequestTime - currentStore.stakingStartTime;
         } else {
             passedSeconds = block.timestamp - currentStore.stakingStartTime;
         }
+
 
         uint256 passedDays = passedSeconds / (24 * 60 * 60);
 
@@ -289,6 +308,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
         uint256 reward = getRewardForStakingStore(stakingStoreIndex);
 
+ 
         assert(reward >= currentStore.reward);
 
         currentStore.reward = reward;
