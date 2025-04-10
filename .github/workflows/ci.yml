@@ -15,8 +15,7 @@ jobs:
 
       - name: Set up Foundry
         uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: 1.0.0-stable
+
 
       - name: Install Foundry dependencies
         run: forge install
