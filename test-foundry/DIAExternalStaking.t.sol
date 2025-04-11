@@ -253,7 +253,7 @@ function testRequestUnstake_NotBeneficiaryFails() public {
     address nonBeneficiary = address(0x5678);
 
     vm.startPrank(nonBeneficiary);
-    vm.expectRevert(DIAExternalStaking.NotBeneficiary.selector);
+    vm.expectRevert(DIAExternalStaking.AccessDenied.selector);
     stakingContract.requestUnstake(1);
     vm.stopPrank();
 }
@@ -516,10 +516,11 @@ function testSplitStakeAndUnstake() public {
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(principal, STAKE_AMOUNT, "Principal should match the staked amount");
     
-    // Start by requesting unstake
-    vm.startPrank(user);
+        vm.warp(start + 4 days);
 
-    vm.warp(start + 4 days);
+    // Start by requesting unstake
+    vm.startPrank(delegator);
+
 
     stakingContract.requestUnstake(1);
 

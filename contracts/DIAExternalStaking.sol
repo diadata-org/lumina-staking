@@ -57,7 +57,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
     mapping(uint256 => StakingStore) public stakingStores;
 
     /// @notice Errors
-    error NotBeneficiary();
+    error AccessDenied();
     error AlreadyRequestedUnstake();
     error UnstakingNotRequested();
     error UnstakingPeriodNotElapsed();
@@ -73,6 +73,15 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     error NotOwner();
     error NotPrincipalUnstaker();
+
+    modifier onlyBeneficiaryOrPayoutWallet(uint256 stakingStoreIndex) {
+    StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+    if (msg.sender != currentStore.beneficiary && msg.sender != currentStore.principalPayoutWallet) {
+        revert AccessDenied();
+    }
+    _;
+}
 
     /**
      * @dev Initializes the contract with staking parameters.
@@ -147,12 +156,12 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      * @dev Can only be called by the beneficiary.
      * @param stakingStoreIndex Index of the staking store.
      */
-    function requestUnstake(uint256 stakingStoreIndex) external {
+    function requestUnstake(uint256 stakingStoreIndex) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        if (msg.sender != currentStore.beneficiary) {
-            revert NotBeneficiary();
-        }
+       
+
+ 
 
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
@@ -165,7 +174,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      * @notice Completes the unstaking process after the required duration.
      * @param stakingStoreIndex Index of the staking store.
      */
-    function unstake(uint256 stakingStoreIndex, uint256 amount) external {
+    function unstake(uint256 stakingStoreIndex, uint256 amount) external  onlyBeneficiaryOrPayoutWallet(stakingStoreIndex){
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
