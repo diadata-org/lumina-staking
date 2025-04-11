@@ -7,6 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./DIARewardsDistribution.sol";
+
  
 
 /**
@@ -66,6 +67,9 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
     error AmountBelowMinimumStake(uint256 amount);
     error AmountAboveStakingLimit(uint256 amount);
+
+    error AmountExceedsStaked();
+
 
     error NotOwner();
     error NotPrincipalUnstaker();
@@ -161,10 +165,14 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      * @notice Completes the unstaking process after the required duration.
      * @param stakingStoreIndex Index of the staking store.
      */
-    function unstake(uint256 stakingStoreIndex) external {
+    function unstake(uint256 stakingStoreIndex, uint256 amount) external {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
+        }
+
+        if (amount > currentStore.principal){
+            revert AmountExceedsStaked();
         }
 
         if (
@@ -181,11 +189,13 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
         uint256 rewardToSend = currentStore.reward;
         currentStore.reward = 0;
-        uint256 principalToSend = currentStore.principal;
-        currentStore.principal = 0;
+        uint256 principalToSend = amount;
+        currentStore.principal =  currentStore.principal - amount ;
+        currentStore.unstakingRequestTime =0;
 
         uint256 principalWalletReward = (rewardToSend * currentStore.principalWalletShare) / 100;
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
+
         if (principalWalletReward > 0) {
         STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
@@ -193,6 +203,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
             principalWalletReward
         );
     }
+
 
 
         // Send principal tokens to the payout wallet

@@ -107,8 +107,10 @@ contract DIAExternalStakingTest is Test {
         // Simulate time passing (4 days)
         vm.warp(block.timestamp + 4 days);
 
+        (,,,uint256 principal , , , uint256 unstakingRequestTime,) = stakingContract.stakingStores(1);
+
         // Perform unstake and check balances
-        stakingContract.unstake(1);
+        stakingContract.unstake(1,principal);
         vm.stopPrank();
 
         // Verify reward is zero after unstake (no rewards accumulated in this test)
@@ -137,19 +139,26 @@ contract DIAExternalStakingTest is Test {
 
         // Fast-forward time by 2 days (not enough to unstake)
         vm.warp(block.timestamp + 2 days);
+                (,,,uint256 principal , , , uint256 unstakingRequestTime,) = stakingContract.stakingStores(1);
+
 
         vm.expectRevert(DIAExternalStaking.UnstakingPeriodNotElapsed.selector);
-        stakingContract.unstake(1);
+
+
+        stakingContract.unstake(1,principal);
     }
 
     // Test if unstaking without requesting fails
     function testUnstakeWithoutRequestFails() public {
         testStake();
         vm.startPrank(user);
+        (,,,uint256 principal , , , uint256 unstakingRequestTime,) = stakingContract.stakingStores(1);
+
 
         // Attempt unstake without requesting
         vm.expectRevert(DIAExternalStaking.UnstakingNotRequested.selector);
-        stakingContract.unstake(1);
+
+        stakingContract.unstake(1,principal);
     }
 
         function testOwnerCanSetPrincipalUnstaker() public {
@@ -202,8 +211,10 @@ function testFullStakeAndUnstake() public {
     // Store the current reward balance before unstaking
     uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(1);
 
+                (,,,uint256 principal , , , uint256 unstakingRequestTime,) = stakingContract.stakingStores(1);
+
     // Unstake tokens
-    stakingContract.unstake(1);
+    stakingContract.unstake(1,principal);
     vm.stopPrank();
 
     // Verify user balance is restored after unstake
@@ -304,7 +315,9 @@ function testUnstakeTwiceFails() public {
     
     uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(1);
     // First unstake should succeed
-    stakingContract.unstake(1);
+    (,,,uint256 principal , , , uint256 unstakingRequestTime,) = stakingContract.stakingStores(1);
+
+    stakingContract.unstake(1,principal);
 
     // Verify user balance is restored after the first unstake
     uint256 userBalanceAfterFirstUnstake = stakingToken.balanceOf(user);
@@ -315,10 +328,12 @@ function testUnstakeTwiceFails() public {
 
     // Store balance before second unstake attempt
     uint256 userBalanceBeforeSecondUnstake = stakingToken.balanceOf(user);
+    (,,,  principal , , ,   unstakingRequestTime,) = stakingContract.stakingStores(1);
 
     // Second unstake attempt should fail
-    // vm.expectRevert(DIAExternalStaking.AlreadyUnstaked.selector);
-    stakingContract.unstake(1);
+    vm.expectRevert(DIAExternalStaking.UnstakingNotRequested.selector);
+
+    stakingContract.unstake(1,principal);
 
     // User balance should remain unchanged after failed unstake attempt
     uint256 userBalanceAfterSecondUnstake = stakingToken.balanceOf(user);
@@ -327,6 +342,71 @@ function testUnstakeTwiceFails() public {
     vm.stopPrank();
 }
 
+function testUnstakePartial() public {
+
+    uint256 PARTIAL_UNSTAKE_AMOUNT = 100;
+    // Stake tokens and request unstake
+    testStake();
+    vm.startPrank(user);
+
+    uint256 userBalanceBeforeUnstake = stakingToken.balanceOf(user);
+    uint256 contractBalanceBeforeUnstake = stakingToken.balanceOf(address(stakingContract));
+
+
+    stakingContract.requestUnstake(1);
+
+    // Simulate time passing (after the unstaking period)
+    vm.warp(block.timestamp + 4 days);
+    
+    uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(1);
+    // First unstake should succeed
+    (,,,uint256 principal , , , uint256 unstakingRequestTime,) = stakingContract.stakingStores(1);
+
+    stakingContract.unstake(1,PARTIAL_UNSTAKE_AMOUNT);
+        vm.warp(block.timestamp + 4 days);
+
+
+        stakingContract.requestUnstake(1);
+
+
+    // Verify user balance is restored after the first unstake
+    uint256 userBalanceAfterFirstUnstake = stakingToken.balanceOf(user);
+    uint256 contractBalanceAfterFirstUnstake = stakingToken.balanceOf(address(stakingContract));
+
+console.log("userBalanceAfterFirstUnstake",userBalanceAfterFirstUnstake);
+console.log("userBalanceBeforeUnstake",userBalanceBeforeUnstake);
+
+console.log("rewardBeforeUnstake",rewardBeforeUnstake);
+console.log("STAKE_AMOUNT",STAKE_AMOUNT);
+
+console.log("userBalanceBeforeUnstake + PARTIAL_UNSTAKE_AMOUNT + rewardBeforeUnstake",userBalanceBeforeUnstake + PARTIAL_UNSTAKE_AMOUNT + rewardBeforeUnstake);
+
+
+
+    assertEq(userBalanceAfterFirstUnstake, userBalanceBeforeUnstake + PARTIAL_UNSTAKE_AMOUNT + rewardBeforeUnstake, "User balance should increase after first unstake");
+    assertLt(contractBalanceAfterFirstUnstake, contractBalanceBeforeUnstake, "Contract balance should decrease after first unstake");
+
+    // Store balance before second unstake attempt
+    uint256 userBalanceBeforeSecondUnstake = stakingToken.balanceOf(user);
+
+    // Second unstake attempt should fail
+    // vm.expectRevert(DIAExternalStaking.AlreadyUnstaked.selector);
+    (,,,  principal , , ,   unstakingRequestTime,) = stakingContract.stakingStores(1);
+
+    vm.warp(block.timestamp + 8 days);
+          rewardBeforeUnstake = stakingContract.getRewardForStakingStore(1);
+
+
+    stakingContract.unstake(1,principal);
+
+
+
+    // User balance should remain unchanged after failed unstake attempt
+    uint256 userBalanceAfterSecondUnstake = stakingToken.balanceOf(user);
+    assertEq(userBalanceAfterSecondUnstake, userBalanceBeforeUnstake + STAKE_AMOUNT+ rewardBeforeUnstake, "User balance should remain the same after failed second unstake");
+
+    vm.stopPrank();
+}
 
 function testUpdatePrincipalPayoutWallet() public {
     stakeTokens(STAKE_AMOUNT);
@@ -439,7 +519,7 @@ function testSplitStakeAndUnstake() public {
     // Start by requesting unstake
     vm.startPrank(user);
 
-        vm.warp(start + 4 days);
+    vm.warp(start + 4 days);
 
     stakingContract.requestUnstake(1);
 
@@ -455,9 +535,10 @@ function testSplitStakeAndUnstake() public {
 
     console.log("96% Rewards",userRewards);
 
+                    (,,,  principal , , ,   ,) = stakingContract.stakingStores(1);
 
     // Unstake tokens
-    stakingContract.unstake(1);
+    stakingContract.unstake(1,principal);
     vm.stopPrank();
 
     // Verify user balance is restored after unstake
