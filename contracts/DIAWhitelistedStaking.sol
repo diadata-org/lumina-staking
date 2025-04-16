@@ -26,6 +26,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
         uint256 paidOutReward;
         uint256 stakingStartTime;
         uint256 unstakingRequestTime;
+        uint256 principalWalletShare;
     }
 
     /// @notice How long (in seconds) for unstaking to take place
@@ -50,10 +51,12 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
     event StakerAddressRemoved(address removedStaker);
 
     /// @notice Errors
+    error AccessDenied();
     error NotBeneficiary();
     error AlreadyRequestedUnstake();
     error UnstakingNotRequested();
     error UnstakingPeriodNotElapsed();
+    error AmountExceedsStaked();
 
     error UnstakingDurationTooShort();
     error UnstakingDurationTooLong();
@@ -65,6 +68,15 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
 
     error NotOwner();
     error NotPrincipalUnstaker();
+
+      modifier onlyBeneficiaryOrPayoutWallet(uint256 stakingStoreIndex) {
+    StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+    if (msg.sender != currentStore.beneficiary && msg.sender != currentStore.principalPayoutWallet) {
+        revert AccessDenied();
+    }
+    _;
+}
 
     /**
      * @dev Initializes the contract with staking parameters.
@@ -98,7 +110,8 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
      */
     function stakeForAddress(
         address beneficiaryAddress,
-        uint256 amount
+        uint256 amount,
+        uint256 principalWalletShare
     ) public {
         if (!stakingWhitelist[beneficiaryAddress]) {
             revert NotWhitelisted();
@@ -118,6 +131,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
         newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
         newStore.stakingStartTime = block.timestamp;
+        newStore.principalWalletShare = principalWalletShare;
         newStore.principalUnstaker = msg.sender;
     }
 
@@ -125,8 +139,8 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
      * @notice Allows a user to stake tokens directly.
      * @param amount The amount of tokens to stake.
      */
-    function stake(uint256 amount) external {
-        return stakeForAddress(msg.sender, amount);
+    function stake(uint256 amount,uint256 principalWalletShare) external {
+        return stakeForAddress(msg.sender, amount,principalWalletShare);
     }
 
     /**
@@ -164,11 +178,9 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
      * @dev Can only be called by the beneficiary.
      * @param stakingStoreIndex Index of the staking store.
      */
-    function requestUnstake(uint256 stakingStoreIndex) external {
+    function requestUnstake(uint256 stakingStoreIndex) external  onlyBeneficiaryOrPayoutWallet(stakingStoreIndex){
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        if (msg.sender != currentStore.beneficiary) {
-            revert NotBeneficiary();
-        }
+      
 
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
@@ -180,7 +192,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
      * @notice Completes the unstaking process after the required duration.
      * @param stakingStoreIndex Index of the staking store.
      */
-    function unstake(uint256 stakingStoreIndex) external {
+    function unstake(uint256 stakingStoreIndex,uint256 amount) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
@@ -193,20 +205,39 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
             revert UnstakingPeriodNotElapsed();
         }
 
+         if (amount > currentStore.principal){
+            revert AmountExceedsStaked();
+        }
+
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
 
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
 
+        uint256 principalWalletReward = (rewardToSend * currentStore.principalWalletShare) / 10000;
+        uint256 beneficiaryReward = rewardToSend - principalWalletReward;
+
+        if (principalWalletReward > 0) {
+        // Send tokens to delegator
+        STAKING_TOKEN.safeTransferFrom(
+            rewardsWallet,
+            currentStore.principalPayoutWallet,
+            principalWalletReward
+        );
+        }   
+
+
         // Send tokens to beneficiary
         STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
-            rewardToSend
+            beneficiaryReward
         );
         currentStore.unstakingRequestTime = 0;
         currentStore.reward = 0;
+        currentStore.stakingStartTime = block.timestamp;
+
     }
 
     /**
@@ -227,6 +258,9 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
 
        
         currentStore.unstakingRequestTime = 0;
+        currentStore.stakingStartTime = block.timestamp;
+
+        
 
         // Pay out principal
         uint256 principalToSend = currentStore.principal;
@@ -325,7 +359,7 @@ contract DIAWhitelistedStaking is Ownable, DIARewardsDistribution ,ReentrancyGua
      * @param stakingStoreIndex The index of the staking store.
      * @custom:assert The newly calculated reward must be greater than or equal to the current reward.
      */
-    function updateReward(uint256 stakingStoreIndex) public {
+    function updateReward(uint256 stakingStoreIndex) internal {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         uint256 reward = getRewardForStakingStore(stakingStoreIndex);
         assert(reward >= currentStore.reward);

@@ -158,11 +158,6 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      */
     function requestUnstake(uint256 stakingStoreIndex) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-
-       
-
- 
-
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
         }
@@ -201,8 +196,10 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
         uint256 principalToSend = amount;
         currentStore.principal =  currentStore.principal - amount ;
         currentStore.unstakingRequestTime =0;
+        currentStore.stakingStartTime =block.timestamp;
 
-        uint256 principalWalletReward = (rewardToSend * currentStore.principalWalletShare) / 100;
+
+        uint256 principalWalletReward = (rewardToSend * currentStore.principalWalletShare) / 10000;
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
 
         if (principalWalletReward > 0) {
@@ -215,7 +212,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
 
 
 
-        // Send principal tokens to the payout wallet
+       // Send principal tokens to the payout wallet
         STAKING_TOKEN.safeTransfer(
             currentStore.principalPayoutWallet,
             principalToSend
@@ -323,7 +320,7 @@ contract DIAExternalStaking is Ownable, DIARewardsDistribution {
      * @param stakingStoreIndex The index of the staking store.
      * @custom:assert The newly calculated reward must be greater than or equal to the current reward.
      */
-    function updateReward(uint256 stakingStoreIndex) public {
+    function updateReward(uint256 stakingStoreIndex) internal {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         uint256 reward = getRewardForStakingStore(stakingStoreIndex);
