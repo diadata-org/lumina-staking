@@ -47,6 +47,8 @@ contract DIAExternalStakingTest is Test {
             STAKING_LIMIT
         );
 
+        stakingContract.setDailyWithdrawalThreshold(1);
+
         deal(address(stakingToken), user, INITIAL_USER_BALANCE);
         deal(address(stakingToken), rewardsWallet, 10000000 * 10 ** 18);
         deal(
@@ -704,7 +706,7 @@ contract DIAExternalStakingTest is Test {
         vm.stopPrank();
     }
 
-    function testSplitStakeAndUnstake() public {
+    function testSplitStakeAndUnstakeExternal() public {
         address delegator = address(0x345);
         deal(address(stakingToken), delegator, INITIAL_USER_BALANCE);
 
@@ -809,4 +811,26 @@ contract DIAExternalStakingTest is Test {
             "User balance should include the staked amount and accumulated rewards"
         );
     }
+
+    function testUnstakeExceedsDailyLimitFails() public {
+    // Stake and request unstake
+    stakeTokens(STAKE_AMOUNT);
+
+    stakingContract.setDailyWithdrawalThreshold(100000* 10 ** 18);
+
+    vm.startPrank(user);
+    stakingContract.requestUnstake(1);
+
+    // Simulate passage of time past unstaking delay
+    vm.warp(block.timestamp + 4 days);
+
+
+
+    // Attempt to unstake, should fail due to limit
+    vm.expectRevert(DIAExternalStaking.DailyWithdrawalLimitExceeded.selector);
+    stakingContract.unstake(1, STAKE_AMOUNT);
+
+ 
+     vm.stopPrank();
+}
 }
