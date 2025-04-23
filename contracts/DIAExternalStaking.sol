@@ -129,7 +129,7 @@ contract DIAExternalStaking is
         totalDailyWithdrawals += amount;
 
         uint256 principalWalletReward = (rewardToSend *
-            currentStore.principalWalletShareBps) / 10000;
+            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
 
         if (principalWalletReward > 0) {

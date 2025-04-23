@@ -58,6 +58,12 @@ event DailyWithdrawalThresholdUpdated(
     uint256 newThreshold
 );
 
+event PrincipalWalletShareUpdateRequested(
+    uint256 indexed stakeId,
+    uint32 newBps,
+    uint256 timestamp
+);
+
 abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -66,6 +72,14 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
     mapping(address => uint256[]) internal stakingIndicesByPayoutWallet;
 
     uint256 public stakingIndex;
+
+    struct PendingShareUpdate {
+        uint32 newShareBps;
+        uint64 requestTime;
+    }
+
+    mapping(uint256 => PendingShareUpdate) public pendingShareUpdates;
+    uint64 public constant SHARE_UPDATE_GRACE_PERIOD = 1 days;
 
     /// @notice ERC20 token used for staking.
     IERC20 public immutable STAKING_TOKEN;
@@ -80,6 +94,8 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         uint64 stakingStartTime;
         uint64 unstakingRequestTime;
         uint32 principalWalletShareBps;
+        uint32 pendingPrincipalWalletShareBps;
+        uint64 pendingShareUpdateTime;
     }
 
     uint256 public tokensStaked;
@@ -308,5 +324,46 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
 
         currentStore.unstakingRequestTime = uint64(block.timestamp);
         emit UnstakeRequested(msg.sender, stakingStoreIndex);
+    }
+
+    function _getCurrentPrincipalWalletShareBps(
+        uint256 stakeId
+    ) internal view returns (uint32) {
+        PendingShareUpdate memory pending = pendingShareUpdates[stakeId];
+
+        if (
+            pending.requestTime > 0 &&
+            block.timestamp >= pending.requestTime + SHARE_UPDATE_GRACE_PERIOD
+        ) {
+            return pending.newShareBps;
+        }
+
+        return stakingStores[stakeId].principalWalletShareBps;
+    }
+
+    function requestPrincipalWalletShareUpdate(
+        uint256 stakeId,
+        uint32 newShareBps
+    ) external {
+        console.log(msg.sender);
+        console.log(stakingStores[stakeId].beneficiary);
+
+        require(
+            msg.sender == stakingStores[stakeId].beneficiary,
+            "Not beneficiary"
+        );
+
+        if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
+
+        pendingShareUpdates[stakeId] = PendingShareUpdate({
+            newShareBps: newShareBps,
+            requestTime: uint64(block.timestamp)
+        });
+
+        emit PrincipalWalletShareUpdateRequested(
+            stakeId,
+            newShareBps,
+            block.timestamp
+        );
     }
 }
