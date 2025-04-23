@@ -8,6 +8,8 @@ import "../contracts/DIAExternalStaking.sol";
 import "../contracts/DIARewardsDistribution.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../contracts/DIAStakingCommons.sol";
+
 
 // Mock ERC20 token for testing
 contract MockERC20 is ERC20 {
@@ -107,7 +109,7 @@ contract DIAExternalStakingTest is Test {
         );
 
         // Verify staking store
-        (address beneficiary, , , uint256 principal, , , , ) = stakingContract
+        (address beneficiary, , , uint256 principal, , , , ,,,) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -123,7 +125,7 @@ contract DIAExternalStakingTest is Test {
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
 
-        (, , , , , , uint256 unstakingRequestTime, ) = stakingContract
+        (, , , , , , uint256 unstakingRequestTime, ,,,) = stakingContract
             .stakingStores(1);
         console.log("Unstaking request time:", unstakingRequestTime);
         // Uncomment and assert if necessary
@@ -148,6 +150,9 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -156,7 +161,7 @@ contract DIAExternalStakingTest is Test {
         vm.stopPrank();
 
         // Verify reward is zero after unstake (no rewards accumulated in this test)
-        (, , , , uint256 reward, , , ) = stakingContract.stakingStores(1);
+        (, , , , uint256 reward, , , ,,,) = stakingContract.stakingStores(1);
         assertEq(reward, 0, "Reward should be zero after unstaking");
     }
 
@@ -189,10 +194,13 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
-        vm.expectRevert(DIAExternalStaking.UnstakingPeriodNotElapsed.selector);
+        vm.expectRevert(UnstakingPeriodNotElapsed.selector);
 
         stakingContract.unstake(1, principal);
     }
@@ -209,11 +217,14 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
         // Attempt unstake without requesting
-        vm.expectRevert(DIAExternalStaking.UnstakingNotRequested.selector);
+        vm.expectRevert(UnstakingNotRequested.selector);
 
         stakingContract.unstake(1, principal);
     }
@@ -233,6 +244,9 @@ contract DIAExternalStakingTest is Test {
             uint256 reward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -265,6 +279,9 @@ contract DIAExternalStakingTest is Test {
             uint256 reward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -300,6 +317,9 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -346,7 +366,7 @@ contract DIAExternalStakingTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                DIAExternalStaking.AmountBelowMinimumStake.selector,
+                AmountBelowMinimumStake.selector,
                 belowMinimumStake
             )
         );
@@ -362,7 +382,7 @@ contract DIAExternalStakingTest is Test {
         address nonBeneficiary = address(0x5678);
 
         vm.startPrank(nonBeneficiary);
-        vm.expectRevert(DIAExternalStaking.AccessDenied.selector);
+        vm.expectRevert(AccessDenied.selector);
         stakingContract.requestUnstake(1);
         vm.stopPrank();
     }
@@ -373,7 +393,7 @@ contract DIAExternalStakingTest is Test {
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
 
-        vm.expectRevert(DIAExternalStaking.AlreadyRequestedUnstake.selector);
+        vm.expectRevert(AlreadyRequestedUnstake.selector);
         stakingContract.requestUnstake(1);
         vm.stopPrank();
     }
@@ -398,7 +418,7 @@ contract DIAExternalStakingTest is Test {
         );
 
         // Fetch unstaking request time
-        (, , , , , , uint256 unstakingRequestTime, ) = stakingContract
+        (, , , , , , uint256 unstakingRequestTime, ,,,) = stakingContract
             .stakingStores(1);
         console.log("Unstaking request time:", unstakingRequestTime);
 
@@ -451,6 +471,9 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -475,11 +498,11 @@ contract DIAExternalStakingTest is Test {
 
         // Store balance before second unstake attempt
         uint256 userBalanceBeforeSecondUnstake = stakingToken.balanceOf(user);
-        (, , , principal, , , unstakingRequestTime, ) = stakingContract
+        (, , , principal, , , unstakingRequestTime, ,,,) = stakingContract
             .stakingStores(1);
 
         // Second unstake attempt should fail
-        vm.expectRevert(DIAExternalStaking.UnstakingNotRequested.selector);
+        vm.expectRevert(UnstakingNotRequested.selector);
 
         stakingContract.unstake(1, principal);
 
@@ -559,6 +582,9 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             uint256 unstakingRequestTime,
+            ,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -607,7 +633,7 @@ contract DIAExternalStakingTest is Test {
 
         // Second unstake attempt should fail
         // vm.expectRevert(DIAExternalStaking.AlreadyUnstaked.selector);
-        (, , , principal, , , unstakingRequestTime, ) = stakingContract
+        (, , , principal, , , unstakingRequestTime, ,,,) = stakingContract
             .stakingStores(1);
 
         vm.warp(block.timestamp + 8 days);
@@ -636,7 +662,7 @@ contract DIAExternalStakingTest is Test {
         stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
         vm.stopPrank();
 
-        (, address principalPayoutWallet, , , , , , ) = stakingContract
+        (, address principalPayoutWallet, , , , , , ,,,) = stakingContract
             .stakingStores(1);
 
         assertEq(
@@ -665,7 +691,7 @@ contract DIAExternalStakingTest is Test {
         uint256 shortDuration = 12 hours; // Less than 1 day
 
         vm.startPrank(owner);
-        vm.expectRevert(DIAExternalStaking.UnstakingDurationTooShort.selector);
+        vm.expectRevert(UnstakingDurationTooShort.selector);
         stakingContract.setUnstakingDuration(shortDuration);
         vm.stopPrank();
     }
@@ -674,7 +700,7 @@ contract DIAExternalStakingTest is Test {
         uint256 longDuration = 21 days; // More than 20 days
 
         vm.startPrank(owner);
-        vm.expectRevert(DIAExternalStaking.UnstakingDurationTooLong.selector);
+        vm.expectRevert(UnstakingDurationTooLong.selector);
         stakingContract.setUnstakingDuration(longDuration);
         vm.stopPrank();
     }
@@ -701,7 +727,7 @@ contract DIAExternalStakingTest is Test {
 
         // A non-principal unstaker should fail to update the payout wallet
         vm.startPrank(address(0x5678));
-        vm.expectRevert(DIAExternalStaking.NotPrincipalUnstaker.selector);
+        vm.expectRevert(NotPrincipalUnstaker.selector);
         stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
         vm.stopPrank();
     }
@@ -746,7 +772,7 @@ contract DIAExternalStakingTest is Test {
         );
 
         // Verify staking store
-        (address beneficiary, , , uint256 principal, , , , ) = stakingContract
+        (address beneficiary, , , uint256 principal, , , , ,,,) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -776,7 +802,7 @@ contract DIAExternalStakingTest is Test {
 
         console.log("96% Rewards", userRewards);
 
-        (, , , principal, , , , ) = stakingContract.stakingStores(1);
+        (, , , principal, , , ,, ,,) = stakingContract.stakingStores(1);
 
         // Unstake tokens
         stakingContract.unstake(1, principal);
@@ -827,10 +853,11 @@ contract DIAExternalStakingTest is Test {
 
 
     // Attempt to unstake, should fail due to limit
-    vm.expectRevert(DIAExternalStaking.DailyWithdrawalLimitExceeded.selector);
+    vm.expectRevert(DailyWithdrawalLimitExceeded.selector);
     stakingContract.unstake(1, STAKE_AMOUNT);
 
  
      vm.stopPrank();
 }
+
 }

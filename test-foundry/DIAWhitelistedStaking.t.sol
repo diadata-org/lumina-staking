@@ -5,6 +5,8 @@ import "forge-std/Test.sol";
 import "../contracts/DIAWhitelistedStaking.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../contracts/DIAStakingCommons.sol";
+
 
 // Mock ERC20 token for testing
 contract MockERC20 is ERC20 {
@@ -29,6 +31,9 @@ contract DIAWhitelistedStakingTest is Test {
 
     address rewardsWallet = address(0x124);
 
+        uint256 constant STAKING_LIMIT = 100000000 * 10 ** 18;
+
+
     uint256 constant STAKE_AMOUNT = 100 * 10 ** 18;
     uint256 constant INITIAL_USER_BALANCE = 1000 * 10 ** 18;
     uint256 constant INITIAL_CONTRACT_BALANCE = 1000 * 10 ** 18;
@@ -44,6 +49,9 @@ contract DIAWhitelistedStakingTest is Test {
             rewardsWallet,
             100
         );
+
+                stakingContract.setDailyWithdrawalThreshold(1);
+
 
         deal(address(stakingToken), user, INITIAL_USER_BALANCE);
         deal(address(stakingToken), owner, INITIAL_USER_BALANCE);
@@ -72,7 +80,7 @@ contract DIAWhitelistedStakingTest is Test {
         stakingContract.addWhitelistedStaker(address(user));
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), amount);
-        stakingContract.stake(amount, 0);
+        stakingContract.stake(amount);
         vm.stopPrank();
     }
 
@@ -114,7 +122,7 @@ contract DIAWhitelistedStakingTest is Test {
         );
 
         // Verify staking store
-        (address beneficiary, , , uint256 principal, , , , , ) = stakingContract
+        (address beneficiary, , , uint256 principal, , , , , ,,) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -129,7 +137,7 @@ contract DIAWhitelistedStakingTest is Test {
         testStake();
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
-        (, , , , , , , uint256 unstakingRequestTime, ) = stakingContract
+        (, , , , , , , uint256 unstakingRequestTime,,, ) = stakingContract
             .stakingStores(1);
 
         console.log("Unstaking request time", unstakingRequestTime);
@@ -150,7 +158,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.stopPrank();
 
         // Verify reward is zero after unstake (no rewards accumulated in this test)
-        (, , , , uint256 reward, , , , ) = stakingContract.stakingStores(1);
+        (, , , , uint256 reward, , , ,,, ) = stakingContract.stakingStores(1);
         assertEq(reward, 0, "Reward should be zero after unstaking");
     }
 
@@ -179,7 +187,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.warp(block.timestamp + 2 days);
 
         vm.expectRevert(
-            DIAWhitelistedStaking.UnstakingPeriodNotElapsed.selector
+            UnstakingPeriodNotElapsed.selector
         );
         stakingContract.unstake(1,STAKE_AMOUNT);
     }
@@ -190,7 +198,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.startPrank(user);
 
         // Attempt unstake without requesting
-        vm.expectRevert(DIAWhitelistedStaking.UnstakingNotRequested.selector);
+        vm.expectRevert(UnstakingNotRequested.selector);
         stakingContract.unstake(1,STAKE_AMOUNT);
     }
 
@@ -232,10 +240,12 @@ contract DIAWhitelistedStakingTest is Test {
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
 
+
         // Fast-forward time by 4 days
         vm.warp(block.timestamp + 4 days);
 
-        stakingContract.unstake(1,STAKE_AMOUNT);
+        stakingContract.unstake(1,1 * 10 ** 18);
+
         uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(
             1
         );
@@ -246,9 +256,11 @@ contract DIAWhitelistedStakingTest is Test {
             rewardBeforeUnstake
         );
 
+        
+
         vm.startPrank(address(0x001));
 
-        vm.expectRevert(DIAWhitelistedStaking.NotPrincipalUnstaker.selector);
+        vm.expectRevert(NotPrincipalUnstaker.selector);
         stakingContract.unstakePrincipal(1);
 
         vm.stopPrank();
@@ -262,7 +274,7 @@ contract DIAWhitelistedStakingTest is Test {
         stakingContract.addWhitelistedStaker(u);
         vm.startPrank(u);
         stakingToken.approve(address(stakingContract), amount);
-        stakingContract.stake(amount, 0);
+        stakingContract.stake(amount);
         vm.stopPrank();
     }
 
@@ -295,6 +307,8 @@ contract DIAWhitelistedStakingTest is Test {
                 ,
                 ,
                 uint256 principal,
+                ,
+                ,
                 ,
                 ,
                 ,
@@ -346,6 +360,8 @@ contract DIAWhitelistedStakingTest is Test {
             uint256 paidOutReward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -379,6 +395,8 @@ contract DIAWhitelistedStakingTest is Test {
             uint256 paidOutReward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
+            ,
+            ,
 
         ) = stakingContract.stakingStores(1);
 
@@ -393,7 +411,7 @@ contract DIAWhitelistedStakingTest is Test {
         stakeTokens(STAKE_AMOUNT);
         vm.startPrank(address(0x5678));
 
-        vm.expectRevert(DIAWhitelistedStaking.NotPrincipalUnstaker.selector);
+        vm.expectRevert(NotPrincipalUnstaker.selector);
         stakingContract.updatePrincipalUnstaker(user, 1);
         vm.stopPrank();
     }
@@ -403,12 +421,19 @@ contract DIAWhitelistedStakingTest is Test {
 
         address newPayoutWallet = address(0x9876);
 
+         (, address principalPayoutWallet, , , , , , , ,,) = stakingContract
+            .stakingStores(1);
+
+            console.log("principalPayoutWallet",principalPayoutWallet);
+            console.log("owner",owner);
+
+
         // Ensure only the principal unstaker can update
-        vm.startPrank(owner);
+        vm.startPrank(address(0x123));
         stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
         vm.stopPrank();
 
-        (, address principalPayoutWallet, , , , , , , ) = stakingContract
+        (,   principalPayoutWallet, , , , , , , ,,) = stakingContract
             .stakingStores(1);
 
         assertEq(
@@ -423,7 +448,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         // Attempt unstake from `user2`, who is not the beneficiary
         vm.startPrank(user2);
-        vm.expectRevert(DIAWhitelistedStaking.AccessDenied.selector);
+        vm.expectRevert(AccessDenied.selector);
         stakingContract.requestUnstake(1);
         vm.stopPrank();
     }
@@ -435,7 +460,7 @@ contract DIAWhitelistedStakingTest is Test {
         stakingContract.requestUnstake(1); // First request should succeed
 
         // Second request should fail
-        vm.expectRevert(DIAWhitelistedStaking.AlreadyRequestedUnstake.selector);
+        vm.expectRevert(AlreadyRequestedUnstake.selector);
         stakingContract.requestUnstake(1);
         vm.stopPrank();
     }
@@ -444,7 +469,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.startPrank(owner);
 
         // Attempt to remove a non-whitelisted staker
-        vm.expectRevert(DIAWhitelistedStaking.NotWhitelisted.selector);
+        vm.expectRevert(NotWhitelisted.selector);
         stakingContract.removeWhitelistedStaker(user);
 
         vm.stopPrank();
@@ -477,7 +502,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         // Attempt to set duration less than 1 day
         vm.expectRevert(
-            DIAWhitelistedStaking.UnstakingDurationTooShort.selector
+            UnstakingDurationTooShort.selector
         );
         stakingContract.setUnstakingDuration(0.5 days);
 
@@ -489,7 +514,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         // Attempt to set duration more than 20 days
         vm.expectRevert(
-            DIAWhitelistedStaking.UnstakingDurationTooLong.selector
+            UnstakingDurationTooLong.selector
         );
         stakingContract.setUnstakingDuration(21 days);
 
@@ -605,7 +630,7 @@ contract DIAWhitelistedStakingTest is Test {
      
 
 
-              (address beneficiary, , , uint256 principal, , , , , ) = stakingContract
+              (address beneficiary, , , uint256 principal, , , , ,,, ) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -636,7 +661,7 @@ contract DIAWhitelistedStakingTest is Test {
         console.log("96% Rewards", userRewards);
 
  
-          (  beneficiary, , ,   principal, , , , , ) = stakingContract
+          (  beneficiary, , ,   principal, , , , ,,, ) = stakingContract
             .stakingStores(1);
 
         // Unstake tokens
@@ -672,4 +697,44 @@ contract DIAWhitelistedStakingTest is Test {
             "User balance should include the staked amount and accumulated rewards"
         );
     }
+
+    function test_RequestPrincipalWalletShareUpdate() public {
+    uint256 principal = 1_000e18;
+    uint32 newShareBps = 5000; // 50%
+    uint64 gracePeriod = 1 days;
+
+
+
+    vm.prank(owner);
+
+    stakingContract.addWhitelistedStaker(address(user));
+
+        vm.prank(user);
+        stakingToken.approve(address(stakingContract), 10000000 * 10 ** 18);
+
+
+    // Setup staking
+    vm.prank(user);
+    stakingContract.stake(principal);
+    uint256[] memory index = stakingContract.getStakingIndicesByBeneficiary(address(user));
+ 
+    // Attempt update by unauthorized user
+    vm.expectRevert("Not beneficiary");
+    stakingContract.requestPrincipalWalletShareUpdate(index[0], newShareBps);
+
+
+    // Request update by beneficiary
+    vm.prank(user);
+    stakingContract.requestPrincipalWalletShareUpdate(index[0], newShareBps);
+
+    // Check pending update is stored correctly
+    (uint32 bps, uint64 requestTime) = stakingContract.pendingShareUpdates(1);
+    assertEq(bps, newShareBps, "Stored BPS should match requested BPS");
+    assertEq(requestTime, block.timestamp, "Stored timestamp should be current");
+
+    // Try invalid BPS > 10000
+    vm.prank(user);
+    vm.expectRevert();
+    stakingContract.requestPrincipalWalletShareUpdate(index[0], 10001);
+}
 }
