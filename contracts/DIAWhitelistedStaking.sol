@@ -120,6 +120,9 @@ contract DIAWhitelistedStaking is
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
 
+        uint256 principalToSend = amount;
+        currentStore.principal = currentStore.principal - amount;
+
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
 
