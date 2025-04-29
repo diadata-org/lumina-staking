@@ -8,3 +8,7 @@ out
 yarn.lock
 .gutmodules
 lib
+coverage
+lcov.info
+coverage-html
+

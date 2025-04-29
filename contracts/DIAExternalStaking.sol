@@ -153,10 +153,12 @@ contract DIAExternalStaking is
             beneficiaryReward
         );
         emit Unstaked(
-            currentStore.beneficiary,
             stakingStoreIndex,
             principalToSend,
-            rewardToSend
+            principalWalletReward,
+            beneficiaryReward,
+            currentStore.principalPayoutWallet,
+            currentStore.beneficiary
         );
     }
 

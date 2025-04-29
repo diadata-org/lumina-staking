@@ -154,7 +154,7 @@ contract DIAWhitelistedStakingTest is Test {
         // Fast-forward time by 4 days
         vm.warp(block.timestamp + 4 days);
 
-        stakingContract.unstake(1,STAKE_AMOUNT);
+        stakingContract.unstake(1);
         vm.stopPrank();
 
         // Verify reward is zero after unstake (no rewards accumulated in this test)
@@ -189,7 +189,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.expectRevert(
             UnstakingPeriodNotElapsed.selector
         );
-        stakingContract.unstake(1,STAKE_AMOUNT);
+        stakingContract.unstake(1);
     }
 
     // Test if unstaking without request fails
@@ -199,7 +199,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         // Attempt unstake without requesting
         vm.expectRevert(UnstakingNotRequested.selector);
-        stakingContract.unstake(1,STAKE_AMOUNT);
+        stakingContract.unstake(1);
     }
 
     // TODO: Test full stake and unstake flow
@@ -244,7 +244,7 @@ contract DIAWhitelistedStakingTest is Test {
         // Fast-forward time by 4 days
         vm.warp(block.timestamp + 4 days);
 
-        stakingContract.unstake(1,1 * 10 ** 18);
+        stakingContract.unstake(1);
 
         uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(
             1
@@ -337,11 +337,11 @@ contract DIAWhitelistedStakingTest is Test {
         vm.warp(block.timestamp + 4 days);
 
         // First unstake should succeed
-        stakingContract.unstake(1,STAKE_AMOUNT);
+        stakingContract.unstake(1);
 
         // Attempt to unstake again should revert
         vm.expectRevert();
-        stakingContract.unstake(1,STAKE_AMOUNT);
+        stakingContract.unstake(1);
     }
 
     function testOwnerCanSetPrincipalUnstaker() public {
@@ -665,7 +665,7 @@ contract DIAWhitelistedStakingTest is Test {
             .stakingStores(1);
 
         // Unstake tokens
-        stakingContract.unstake(1, principal);
+        stakingContract.unstake(1);
         vm.stopPrank();
 
         // Verify user balance is restored after unstake
@@ -719,7 +719,7 @@ contract DIAWhitelistedStakingTest is Test {
     uint256[] memory index = stakingContract.getStakingIndicesByBeneficiary(address(user));
  
     // Attempt update by unauthorized user
-    vm.expectRevert("Not beneficiary");
+    vm.expectRevert(NotBeneficiary.selector);
     stakingContract.requestPrincipalWalletShareUpdate(index[0], newShareBps);
 
 

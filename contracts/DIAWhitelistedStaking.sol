@@ -94,13 +94,8 @@ contract DIAWhitelistedStaking is
      * @param stakingStoreIndex Index of the staking store.
      */
     function unstake(
-        uint256 stakingStoreIndex,
-        uint256 amount
-    )
-        external
-        onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
-        checkDailyWithdrawalLimit(amount)
-    {
+        uint256 stakingStoreIndex
+    ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
@@ -113,15 +108,8 @@ contract DIAWhitelistedStaking is
             revert UnstakingPeriodNotElapsed();
         }
 
-        if (amount > currentStore.principal) {
-            revert AmountExceedsStaked();
-        }
-
         // Ensure the reward amount is up to date
         updateReward(stakingStoreIndex);
-
-        uint256 principalToSend = amount;
-        currentStore.principal = currentStore.principal - amount;
 
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
@@ -148,7 +136,15 @@ contract DIAWhitelistedStaking is
         currentStore.unstakingRequestTime = 0;
         currentStore.reward = 0;
         currentStore.stakingStartTime = uint64(block.timestamp);
-        tokensStaked -= amount;
+
+        emit Unstaked(
+            stakingStoreIndex,
+            0,
+            principalWalletReward,
+            beneficiaryReward,
+            currentStore.principalPayoutWallet,
+            currentStore.beneficiary
+        );
     }
 
     /**
@@ -158,6 +154,13 @@ contract DIAWhitelistedStaking is
      */
     function unstakePrincipal(uint256 stakingStoreIndex) external nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        if (
+            currentStore.unstakingRequestTime + unstakingDuration >
+            block.timestamp
+        ) {
+            revert UnstakingPeriodNotElapsed();
+        }
 
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
@@ -170,18 +173,41 @@ contract DIAWhitelistedStaking is
         currentStore.unstakingRequestTime = 0;
         currentStore.stakingStartTime = uint64(block.timestamp);
 
-        // Pay out principal
+        uint256 principalWalletReward = (rewardToSend *
+            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
+        uint256 beneficiaryReward = rewardToSend - principalWalletReward;
         uint256 principalToSend = currentStore.principal;
         currentStore.principal = 0;
+
+        if (principalWalletReward > 0) {
+            // Send tokens to delegator
+            STAKING_TOKEN.safeTransferFrom(
+                rewardsWallet,
+                currentStore.principalPayoutWallet,
+                principalWalletReward
+            );
+        }
+
+        // Pay out principal
         STAKING_TOKEN.safeTransfer(
             currentStore.principalPayoutWallet,
             principalToSend
         );
+
         // Send remaining reward tokens to beneficiary
         STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
-            rewardToSend
+            beneficiaryReward
+        );
+
+        emit Unstaked(
+            stakingStoreIndex,
+            principalToSend,
+            principalWalletReward,
+            beneficiaryReward,
+            currentStore.principalPayoutWallet,
+            currentStore.beneficiary
         );
     }
 

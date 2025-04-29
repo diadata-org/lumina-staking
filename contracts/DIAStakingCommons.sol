@@ -6,7 +6,6 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "forge-std/console.sol";
 
 uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
 uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
@@ -29,6 +28,7 @@ error InvalidDailyWithdrawalThreshold(uint256 newThreshold);
 error NotOwner();
 error NotPrincipalUnstaker();
 error NotWhitelisted();
+error NotBeneficiary();
 
 // Events
 event Staked(
@@ -40,12 +40,16 @@ event UnstakeRequested(
     address indexed requester,
     uint256 indexed stakingStoreIndex
 );
+
 event Unstaked(
-    address indexed beneficiary,
     uint256 indexed stakingStoreIndex,
-    uint256 principal,
-    uint256 reward
+    uint256 principalAmount,
+    uint256 principalWalletReward,
+    uint256 beneficiaryReward,
+    address principalPayoutWallet,
+    address beneficiary
 );
+
 event PrincipalPayoutWalletUpdated(
     address oldWallet,
     address newWallet,
@@ -345,13 +349,9 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         uint256 stakeId,
         uint32 newShareBps
     ) external {
-        console.log(msg.sender);
-        console.log(stakingStores[stakeId].beneficiary);
-
-        require(
-            msg.sender == stakingStores[stakeId].beneficiary,
-            "Not beneficiary"
-        );
+        if (msg.sender != stakingStores[stakeId].beneficiary) {
+            revert NotBeneficiary();
+        }
 
         if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
 

@@ -33,23 +33,23 @@ contract StakingComparisonTest is Test {
     
 
     function testPrintRewardTable() public {
-        console.log("Day | Whitelist Reward | External Reward");
-        for (uint256 i = 1; i <= 30; i++) {
-            vm.warp(block.timestamp + 1 days);
+        // console.log("Day | Whitelist Reward | External Reward");
+        // for (uint256 i = 1; i <= 30; i++) {
+        //     vm.warp(block.timestamp + 1 days);
 
-            uint256 wlReward = whitelistStaking.getRewardForStakingStore(0);
-            uint256 exReward = externalStaking.getRewardForStakingStore(0);
+        //     uint256 wlReward = whitelistStaking.getRewardForStakingStore(0);
+        //     uint256 exReward = externalStaking.getRewardForStakingStore(0);
 
-            console.log(
-                string.concat(
-                    vm.toString(i),
-                    " | ",
-                    vm.toString(wlReward),
-                    " | ",
-                    vm.toString(exReward)
-                )
-            );
-        }
+        //     console.log(
+        //         string.concat(
+        //             vm.toString(i),
+        //             " | ",
+        //             vm.toString(wlReward),
+        //             " | ",
+        //             vm.toString(exReward)
+        //         )
+        //     );
+        // }
     }
  
 
@@ -162,7 +162,7 @@ contract StakingComparisonTest is Test {
         (, , , uint256 exPrincipal, , , , ,,, ) = ex.stakingStores(2);
 
         vm.prank(user);
-        wl.unstake(1, wlPrincipal);
+        wl.unstake(1);
         vm.prank(user);
         ex.unstake(1, exPrincipal);
 
