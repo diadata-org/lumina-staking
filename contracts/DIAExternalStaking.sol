@@ -1,47 +1,194 @@
-// SPDX-License-Identifier: GPL
-
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.29;
 
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./DIAStakingCommons.sol";
-import "./DIARewardsDistribution.sol";
 
-/**
- * @title DIAExternalStaking
- * @notice This contract allows to stake tokens and earn rewards.
- */
-contract DIAExternalStaking is
-    Ownable,
-    DIARewardsDistribution,
-    ReentrancyGuard,
-    DIAStakingCommons
-{
+uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
+uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
+
+error AccessDenied();
+error AlreadyRequestedUnstake();
+error UnstakingNotRequested();
+error UnstakingPeriodNotElapsed();
+error UnstakingDurationTooShort();
+error UnstakingDurationTooLong();
+error AmountBelowMinimumStake(uint256 amount);
+error AmountAboveStakingLimit(uint256 amount);
+error AmountExceedsStaked();
+error InvalidPrincipalWalletShare();
+error ZeroAddress();
+error DailyWithdrawalLimitExceeded();
+error InvalidWithdrawalCap(uint256 newBps);
+error InvalidDailyWithdrawalThreshold(uint256 newThreshold);
+error NotPrincipalUnstaker();
+error NotBeneficiary();
+
+// Events
+event Staked(
+    address indexed beneficiary,
+    uint256 indexed stakingStoreIndex,
+    uint256 amount
+);
+event UnstakeRequested(
+    address indexed requester,
+    uint256 indexed stakingStoreIndex
+);
+
+event Unstaked(
+    uint256 indexed stakingStoreIndex,
+    uint256 principalAmount,
+    uint256 principalWalletReward,
+    uint256 beneficiaryReward,
+    address principalPayoutWallet,
+    address beneficiary
+);
+
+event RewardAdded(
+    uint256 amount,
+    address rewardSender
+);
+
+event PrincipalPayoutWalletUpdated(
+    address oldWallet,
+    address newWallet,
+    uint256 stakingStoreIndex
+);
+event UnstakingDurationUpdated(uint256 oldDuration, uint256 newDuration);
+event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
+event DailyWithdrawalThresholdUpdated(
+    uint256 oldThreshold,
+    uint256 newThreshold
+);
+
+event PrincipalWalletShareUpdateRequested(
+    uint256 indexed stakeId,
+    uint32 newBps,
+    uint256 timestamp
+);
+
+abstract contract DIARewardsDistribution is Ownable {
+    IERC20 public immutable REWARDS_TOKEN;
+
+    address public rewardsWallet;
+
+    error InvalidAddress();
+
+    event RewardsWalletUpdated(address oldWallet, address newWallet);
+
+    constructor(
+        address rewardsTokenAddress,
+        address newRewardsWallet
+    ) {
+        REWARDS_TOKEN = IERC20(rewardsTokenAddress);
+        rewardsWallet = newRewardsWallet;
+    }
+
+    function updateRewardsWallet(address newWalletAddress) external onlyOwner {
+        if (newWalletAddress == address(0)) {
+            revert InvalidAddress();
+        }
+        emit RewardsWalletUpdated(rewardsWallet, newWalletAddress);
+
+        rewardsWallet = newWalletAddress;
+    }
+}
+
+contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution {
     using SafeERC20 for IERC20;
 
-    /**
-     * @dev Initializes the contract with staking parameters.
-     * @param _unstakingDuration Duration in seconds required before unstaking.
-     * @param _stakingTokenAddress Address of the ERC20 token used for staking.
-     * @param _rewardsWallet Address of the wallet that holds rewards.This wallet should appove tokens for this contract
-     * @param _rewardRatePerDay Rate at which rewards accumulate daily.
-     */
+    mapping(address => uint256[]) internal stakingIndicesByBeneficiary;
+    mapping(address => uint256[]) internal stakingIndicesByPrincipalUnstaker;
+    mapping(address => uint256[]) internal stakingIndicesByPayoutWallet;
+
+    uint256 public stakingIndex;
+
+    struct PendingShareUpdate {
+        uint32 newShareBps;
+        uint64 requestTime;
+    }
+
+    mapping(uint256 => PendingShareUpdate) public pendingShareUpdates;
+    uint64 public constant SHARE_UPDATE_GRACE_PERIOD = 1 days;
+
+    /// @notice ERC20 token used for staking.
+    IERC20 public immutable STAKING_TOKEN;
+
+    struct StakingStore {
+        address beneficiary;
+        address principalPayoutWallet;
+        address principalUnstaker;
+        uint256 principal;
+        uint256 poolShares;
+        uint64 stakingStartTime;
+        uint64 unstakingRequestTime;
+        uint32 principalWalletShareBps;
+        uint32 pendingPrincipalWalletShareBps;
+        uint64 pendingShareUpdateTime;
+    }
+
+    /// @notice Variables for tracking the pool state and share
+    uint256 public totalPoolSize;
+    uint256 public totalShareAmount;
+
+    uint256 public tokensStaked;
+
+    uint256 public stakingLimit;
+
+    /// @notice How long (in seconds) for unstaking to take place
+    uint256 public unstakingDuration;
+
+    uint256 public totalDailyWithdrawals;
+
+    uint256 public lastWithdrawalResetDay;
+    uint256 public dailyWithdrawalThreshold = 100000 * 10 ** 18; // Set threshold as needed
+    uint256 public withdrawalCapBps = 1000; // 1000 bps = 10%
+
+    /// @notice Mapping of staking index to corresponding staking store.
+    mapping(uint256 => StakingStore) public stakingStores;
+
+    modifier onlyBeneficiaryOrPayoutWallet(uint256 stakingStoreIndex) {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        if (
+            msg.sender != currentStore.beneficiary &&
+            msg.sender != currentStore.principalPayoutWallet
+        ) {
+            revert AccessDenied();
+        }
+        _;
+    }
+
+    modifier checkDailyWithdrawalLimit(uint256 amount) {
+        if (tokensStaked < dailyWithdrawalThreshold) {
+            if (block.timestamp / SECONDS_IN_A_DAY > lastWithdrawalResetDay) {
+                totalDailyWithdrawals = 0;
+                lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
+            }
+
+            uint256 availableDailyLimit = (tokensStaked * withdrawalCapBps) /
+                10000; // Calculate based on bps
+            if (totalDailyWithdrawals + amount > availableDailyLimit) {
+                revert DailyWithdrawalLimitExceeded();
+            }
+        }
+
+        _;
+    }
 
     constructor(
         uint256 _unstakingDuration,
         address _stakingTokenAddress,
         address _rewardsWallet,
-        uint256 _rewardRatePerDay,
         uint256 _stakingLimit
     )
         Ownable(msg.sender)
         DIARewardsDistribution(
             _stakingTokenAddress,
-            _rewardsWallet,
-            _rewardRatePerDay
+            _rewardsWallet
         )
     {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
@@ -55,6 +202,7 @@ contract DIAExternalStaking is
     /**
      * @notice Allows a user to stake tokens directly.
      * @param amount The amount of tokens to stake.
+     * @param principalWalletShareBps The share of principal going to the delegator in basis points
      */
     function stake(
         uint256 amount,
@@ -77,15 +225,192 @@ contract DIAExternalStaking is
             revert AmountAboveStakingLimit(amount);
         }
 
-        _internalStakeForAddress(
-            msg.sender,
-            beneficiaryAddress,
-            amount,
-            principalWalletShareBps
+        if (principalWalletShareBps > 10000)
+            revert InvalidPrincipalWalletShare();
+
+        if (amount < minimumStake) {
+            revert AmountBelowMinimumStake(amount);
+        }
+
+        // Transfer tokens
+        STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
+
+        totalPoolSize += amount;
+        uint256 poolSharesGiven = 0;
+        if (totalShareAmount == 0) {
+            poolSharesGiven = amount;
+        } else {
+            poolSharesGiven = (amount * totalPoolSize) / totalShareAmount;
+        }
+        totalShareAmount += poolSharesGiven;
+
+        // Create staking entry
+        stakingIndex++;
+        StakingStore storage newStore = stakingStores[stakingIndex];
+        newStore.beneficiary = beneficiaryAddress;
+        newStore.principalPayoutWallet = msg.sender;
+        newStore.principal = amount;
+        newStore.poolShares = poolSharesGiven;
+        newStore.stakingStartTime = uint64(block.timestamp);
+        newStore.principalWalletShareBps = principalWalletShareBps;
+        newStore.principalUnstaker = msg.sender;
+
+        // Track stake info
+        tokensStaked += amount;
+        stakingIndicesByBeneficiary[beneficiaryAddress].push(stakingIndex);
+        stakingIndicesByPrincipalUnstaker[msg.sender].push(stakingIndex);
+        stakingIndicesByPayoutWallet[msg.sender].push(stakingIndex);
+
+        emit Staked(beneficiaryAddress, stakingIndex, amount);
+    }
+
+    /**
+     * @notice Updates the duration required before unstaking can be completed.
+     * @dev Only callable by the contract owner.
+     * @param newDuration The new unstaking duration, in seconds.
+     * @custom:revert UnstakingDurationTooShort() if the new duration is less than 1 day.
+     * @custom:revert UnstakingDurationTooLong() if the new duration exceeds 20 days.
+     */
+    function setUnstakingDuration(uint256 newDuration) external onlyOwner {
+        if (newDuration < 1 days) {
+            revert UnstakingDurationTooShort();
+        }
+
+        if (newDuration > 20 days) {
+            revert UnstakingDurationTooLong();
+        }
+        emit UnstakingDurationUpdated(unstakingDuration, newDuration);
+
+        unstakingDuration = newDuration;
+    }
+
+    function setWithdrawalCapBps(uint256 newBps) external onlyOwner {
+        if (newBps > 10000) {
+            revert InvalidWithdrawalCap(newBps);
+        }
+
+        uint256 oldCap = withdrawalCapBps;
+        withdrawalCapBps = newBps;
+
+        emit WithdrawalCapUpdated(oldCap, newBps); // Emit event with old and new values
+    }
+
+    function setDailyWithdrawalThreshold(
+        uint256 newThreshold
+    ) external onlyOwner {
+        if (newThreshold <= 0) {
+            revert InvalidDailyWithdrawalThreshold(newThreshold);
+        }
+
+        uint256 oldThreshold = dailyWithdrawalThreshold;
+        dailyWithdrawalThreshold = newThreshold;
+
+        emit DailyWithdrawalThresholdUpdated(oldThreshold, newThreshold);
+    }
+
+    function getStakingIndicesByBeneficiary(
+        address beneficiary
+    ) external view returns (uint256[] memory) {
+        return stakingIndicesByBeneficiary[beneficiary];
+    }
+
+    function getStakingIndicesByPrincipalUnstaker(
+        address unstaker
+    ) external view returns (uint256[] memory) {
+        return stakingIndicesByPrincipalUnstaker[unstaker];
+    }
+
+    function getStakingIndicesByPayoutWallet(
+        address payoutWallet
+    ) external view returns (uint256[] memory) {
+        return stakingIndicesByPayoutWallet[payoutWallet];
+    }
+
+    function _removeStakingIndexFromAddressMapping(
+        address user,
+        uint256 _stakingIndex,
+        mapping(address => uint256[]) storage indexMap
+    ) internal {
+        uint256[] storage indices = indexMap[user];
+        for (uint256 i = 0; i < indices.length; i++) {
+            if (indices[i] == _stakingIndex) {
+                indices[i] = indices[indices.length - 1];
+                indices.pop();
+                break;
+            }
+        }
+    }
+
+    /**
+     * @notice Updates the principal payout wallet for a given staking index.
+     * @dev Only callable by the contract owner.
+     * @param newWallet New wallet address for receiving the principal.
+     * @param stakingStoreIndex Index of the staking store.
+     */
+    function updatePrincipalPayoutWallet(
+        address newWallet,
+        uint256 stakingStoreIndex
+    ) external {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        address oldWallet = currentStore.principalPayoutWallet;
+
+        currentStore.principalPayoutWallet = newWallet;
+
+        if (currentStore.principalUnstaker != msg.sender) {
+            revert NotPrincipalUnstaker();
+        }
+
+        _removeStakingIndexFromAddressMapping(
+            oldWallet,
+            stakingStoreIndex,
+            stakingIndicesByPayoutWallet
+        );
+        stakingIndicesByPayoutWallet[newWallet].push(stakingStoreIndex);
+
+        emit PrincipalPayoutWalletUpdated(
+            currentStore.principalPayoutWallet,
+            newWallet,
+            stakingStoreIndex
         );
     }
 
     /**
+     * @notice Allows the current unstaker to update the unstaker.
+     * @param newUnstaker New address allowed to unstake the principal.
+     * @param stakingStoreIndex Index of the staking store.
+     */
+    function updatePrincipalUnstaker(
+        address newUnstaker,
+        uint256 stakingStoreIndex
+    ) external {
+        if (newUnstaker == address(0)) revert ZeroAddress();
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        if (currentStore.principalUnstaker != msg.sender) {
+            revert NotPrincipalUnstaker();
+        }
+
+        currentStore.principalUnstaker = newUnstaker;
+    }
+
+    /**
+     * @notice Requests unstaking, starting the waiting period.
+     * @dev Can only be called by the beneficiary.
+     * @param stakingStoreIndex Index of the staking store.
+     */
+    function requestUnstake(
+        uint256 stakingStoreIndex
+    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        if (currentStore.unstakingRequestTime != 0) {
+            revert AlreadyRequestedUnstake();
+        }
+
+        currentStore.unstakingRequestTime = uint64(block.timestamp);
+        emit UnstakeRequested(msg.sender, stakingStoreIndex);
+    }
+
+        /**
      * @notice Completes the unstaking process after the required duration.
      * @param stakingStoreIndex Index of the staking store.
      */
@@ -103,10 +428,6 @@ contract DIAExternalStaking is
             revert UnstakingNotRequested();
         }
 
-        if (amount > currentStore.principal) {
-            revert AmountExceedsStaked();
-        }
-
         if (
             currentStore.unstakingRequestTime + unstakingDuration >
             block.timestamp
@@ -114,22 +435,35 @@ contract DIAExternalStaking is
             revert UnstakingPeriodNotElapsed();
         }
 
-        // Ensure the reward amount is up to date
-        updateReward(stakingStoreIndex);
+        // Determine how many staking tokens in the pool belong to the unstaker
+        uint256 currentAmountOfPool = (currentStore.poolShares * totalPoolSize) / totalShareAmount;
 
-        uint256 rewardToSend = currentStore.reward;
-        currentStore.paidOutReward += rewardToSend;
-        currentStore.reward = 0;
-        uint256 principalToSend = amount;
-        currentStore.principal = currentStore.principal - amount;
+        if (amount > currentAmountOfPool) {
+            revert AmountExceedsStaked();
+        }
+
+        // Determine how much of the requested unstake amount is principal and how much is reward
+        uint256 principalUnstakeAmount = (amount * currentStore.principal) / currentAmountOfPool;
+        uint256 rewardUnstakeAmount = amount - principalUnstakeAmount;
+
+        // Determine how many shares we will deduct for unstaking
+        uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) / currentAmountOfPool;
+
+        uint256 rewardToSend = principalUnstakeAmount;
+        uint256 principalToSend = rewardUnstakeAmount;
+        currentStore.principal = currentStore.principal - principalUnstakeAmount;
         tokensStaked -= amount;
+        currentStore.poolShares -= poolSharesUnstakeAmount;
         currentStore.unstakingRequestTime = 0;
         currentStore.stakingStartTime = uint64(block.timestamp);
 
+        // Update pool shares tracker
         totalDailyWithdrawals += amount;
+        totalPoolSize -= amount;
+        totalShareAmount -= poolSharesUnstakeAmount;
 
         uint256 principalWalletReward = (rewardToSend *
-            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
+        _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
 
         if (principalWalletReward > 0) {
@@ -152,6 +486,7 @@ contract DIAExternalStaking is
             currentStore.beneficiary,
             beneficiaryReward
         );
+
         emit Unstaked(
             stakingStoreIndex,
             principalToSend,
@@ -162,50 +497,49 @@ contract DIAExternalStaking is
         );
     }
 
-    /**
-     * @notice Calculates the accrued reward for a given staking store.
-     * @dev The reward is calculated based on the number of full days passed since staking started.
-     * @param stakingStoreIndex The index of the staking store.
-     * @return The total reward accumulated so far.
-     */
-    function getRewardForStakingStore(
-        uint256 stakingStoreIndex
-    ) public view override returns (uint256) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+    function addRewardToPool(uint256 amount) public {
+        // Transfer tokens
+        STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
 
-        // Calculate number of full days that passed for staking store
-        uint256 passedSeconds;
-        if (currentStore.unstakingRequestTime > 0) {
-            passedSeconds =
-                currentStore.unstakingRequestTime -
-                currentStore.stakingStartTime;
-        } else {
-            passedSeconds = block.timestamp - currentStore.stakingStartTime;
-        }
-
-        uint256 passedDays = passedSeconds / SECONDS_IN_A_DAY;
-
-        uint256 accumulatedReward = currentStore.principal;
-        for (uint32 i = 0; i < passedDays; ++i) {
-            accumulatedReward += (accumulatedReward * rewardRatePerDay) / 1e10;
-        }
-
-        return accumulatedReward - currentStore.principal;
+        totalPoolSize += amount;
+        emit RewardAdded(amount, msg.sender);
     }
 
-    /**
-     * @notice Updates the reward amount for a given staking store.
-     * @dev Ensures the reward does not decrease.
-     * @param stakingStoreIndex The index of the staking store.
-     * @custom:assert The newly calculated reward must be greater than or equal to the current reward.
-     */
-    function updateReward(uint256 stakingStoreIndex) internal {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+    function _getCurrentPrincipalWalletShareBps(
+        uint256 stakeId
+    ) internal view returns (uint32) {
+        PendingShareUpdate memory pending = pendingShareUpdates[stakeId];
 
-        uint256 reward = getRewardForStakingStore(stakingStoreIndex);
+        if (
+            pending.requestTime > 0 &&
+            block.timestamp >= pending.requestTime + SHARE_UPDATE_GRACE_PERIOD
+        ) {
+            return pending.newShareBps;
+        }
 
-        assert(reward >= currentStore.reward);
+        return stakingStores[stakeId].principalWalletShareBps;
+    }
 
-        currentStore.reward = reward;
+    function requestPrincipalWalletShareUpdate(
+        uint256 stakeId,
+        uint32 newShareBps
+    ) external {
+        if (msg.sender != stakingStores[stakeId].beneficiary) {
+            revert NotBeneficiary();
+        }
+
+        if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
+
+        pendingShareUpdates[stakeId] = PendingShareUpdate({
+            newShareBps: newShareBps,
+            requestTime: uint64(block.timestamp)
+        });
+
+        emit PrincipalWalletShareUpdateRequested(
+            stakeId,
+            newShareBps,
+            block.timestamp
+        );
     }
 }
+
