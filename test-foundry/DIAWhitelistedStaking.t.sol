@@ -268,6 +268,22 @@ contract DIAWhitelistedStakingTest is Test {
         // Verify user balance is restored after unstake
     }
 
+
+    function test_UnstakingPeriodNotElapsed() public {
+        testStake();
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+
+
+        // Fast-forward time by 4 days
+        // vm.warp(block.timestamp + 4 days);
+
+        vm.expectRevert(UnstakingPeriodNotElapsed.selector);
+
+        stakingContract.unstake(1);
+ 
+     }
+
     // Helper function for staking tokens
     function stakeTokensforUser(address u, uint256 amount) internal {
         vm.startPrank(owner);
@@ -443,6 +459,26 @@ contract DIAWhitelistedStakingTest is Test {
         );
     }
 
+       function testUpdatePrincipalPayoutWallet_NotPrincipalUnstaker() public {
+        stakeTokens(STAKE_AMOUNT);
+
+        address newPayoutWallet = address(0x9876);
+
+         (, address principalPayoutWallet, , , , , , , ,,) = stakingContract
+            .stakingStores(1);
+
+            console.log("principalPayoutWallet",principalPayoutWallet);
+            console.log("owner",owner);
+
+
+        // Ensure only the principal unstaker can update
+        vm.startPrank(address(0x121));
+        vm.expectRevert(NotPrincipalUnstaker.selector);
+        stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
+        vm.stopPrank();
+ 
+    }
+
     function testRequestUnstakeNotBeneficiary() public {
         stakeTokens(STAKE_AMOUNT); // Stake on behalf of `user`
 
@@ -580,6 +616,16 @@ contract DIAWhitelistedStakingTest is Test {
         stakingContract.updateRewardsWallet(address(0x00));
 
         vm.stopPrank();
+    }
+
+    function test_StakeForAddress_NotWhitelisted()public {
+
+         stakingToken.approve(address(stakingContract), STAKE_AMOUNT);
+         vm.expectRevert(NotWhitelisted.selector);
+        stakingContract.stakeForAddress(address(0x09), STAKE_AMOUNT, 400); // Principal wallet gets 4% reward
+
+        vm.stopPrank();
+
     }
 
     function testSplitStakeAndUnstake() public {
@@ -737,4 +783,74 @@ contract DIAWhitelistedStakingTest is Test {
     vm.expectRevert();
     stakingContract.requestPrincipalWalletShareUpdate(index[0], 10001);
 }
+
+  function test_InvalidWithdrawalCap() public {
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidWithdrawalCap.selector, 10001)
+        );
+        stakingContract.setWithdrawalCapBps(10001);
+    }
+
+
+    function testSetInvalidDailyWithdrawalThreshold() public {
+        uint256 newThreshold = 0;
+
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                InvalidDailyWithdrawalThreshold.selector,
+                newThreshold
+            )
+        );
+
+        stakingContract.setDailyWithdrawalThreshold(newThreshold);
+    }
+
+        function testGetStakingIndicesByPrincipalUnstaker() public {
+
+                stakeTokens(1*10**18);
+
+
+        uint256[] memory indices = stakingContract.getStakingIndicesByPrincipalUnstaker(
+            user
+        );
+        assertEq(indices.length, 1);
+    }
+
+    function testGetStakingIndicesByPayoutWallet() public {
+
+               stakeTokens(1*10**18);
+
+        uint256[] memory indices = stakingContract.getStakingIndicesByPayoutWallet(
+            user
+        );
+        assertEq(indices.length, 1);
+     }
+
+    //   function test_UnstakeExceedsDailyLimitFails() public {
+    //     // Stake and request unstake
+    //     uint256 STAKE_AMOUNT = 100 * 10 ** 18;
+
+    //     stakeTokens(STAKE_AMOUNT);
+
+    //     vm.startPrank(owner);
+
+    //     stakingContract.setDailyWithdrawalThreshold(10 * 10 ** 18);
+
+    //     vm.startPrank(user);
+    //     stakingContract.requestUnstake(1);
+
+    //     // Simulate passage of time past unstaking delay
+    //     vm.warp(block.timestamp + 4 days);
+
+    //     // Attempt to unstake, should fail due to limit
+    //     vm.expectRevert(DailyWithdrawalLimitExceeded.selector);
+    //     stakingContract.unstake(1);
+
+    //     vm.stopPrank();
+    // }
+
+  
+
 }
