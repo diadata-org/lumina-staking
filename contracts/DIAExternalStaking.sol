@@ -102,17 +102,14 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
     constructor(
         uint256 _unstakingDuration,
         address _stakingTokenAddress,
-        address _rewardsWallet,
         uint256 _stakingLimit
     )
         Ownable(msg.sender)
         DIAExternalRewardsDistribution(
             _stakingTokenAddress,
-            _rewardsWallet
         )
     {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
-        if (_rewardsWallet == address(0)) revert ZeroAddress();
 
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
@@ -389,7 +386,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
 
         if (principalWalletReward > 0) {
             STAKING_TOKEN.safeTransferFrom(
-                rewardsWallet,
+                address(this),
                 currentStore.principalPayoutWallet,
                 principalWalletReward
             );
@@ -403,7 +400,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
 
         // Send reward to the beneficiary
         STAKING_TOKEN.safeTransferFrom(
-            rewardsWallet,
+            address(this),
             currentStore.beneficiary,
             beneficiaryReward
         );
