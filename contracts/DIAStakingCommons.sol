@@ -6,67 +6,12 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./DIACommons.sol";
 
-uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
-uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 
-error AccessDenied();
-error AlreadyRequestedUnstake();
-error UnstakingNotRequested();
-error UnstakingPeriodNotElapsed();
-error UnstakingDurationTooShort();
-error UnstakingDurationTooLong();
-error AmountBelowMinimumStake(uint256 amount);
-error AmountAboveStakingLimit(uint256 amount);
-error AmountExceedsStaked();
-error InvalidPrincipalWalletShare();
-error ZeroAddress();
-error DailyWithdrawalLimitExceeded();
-error DailyWithdrawalThresholdExceeded();
-error InvalidWithdrawalCap(uint256 newBps);
-error InvalidDailyWithdrawalThreshold(uint256 newThreshold);
-error NotOwner();
-error NotPrincipalUnstaker();
-error NotWhitelisted();
-error NotBeneficiary();
-
+ 
 // Events
-event Staked(
-    address indexed beneficiary,
-    uint256 indexed stakingStoreIndex,
-    uint256 amount
-);
-event UnstakeRequested(
-    address indexed requester,
-    uint256 indexed stakingStoreIndex
-);
-
-event Unstaked(
-    uint256 indexed stakingStoreIndex,
-    uint256 principalAmount,
-    uint256 principalWalletReward,
-    uint256 beneficiaryReward,
-    address principalPayoutWallet,
-    address beneficiary
-);
-
-event PrincipalPayoutWalletUpdated(
-    address oldWallet,
-    address newWallet,
-    uint256 stakingStoreIndex
-);
-event UnstakingDurationUpdated(uint256 oldDuration, uint256 newDuration);
-event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
-event DailyWithdrawalThresholdUpdated(
-    uint256 oldThreshold,
-    uint256 newThreshold
-);
-
-event PrincipalWalletShareUpdateRequested(
-    uint256 indexed stakeId,
-    uint32 newBps,
-    uint256 timestamp
-);
+ 
 
 abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;

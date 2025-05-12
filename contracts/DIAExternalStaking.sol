@@ -6,98 +6,18 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./DIAExternalRewardsDistribution.sol";
+import "./DIACommons.sol";
 
-uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
-uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 
-error AccessDenied();
-error AlreadyRequestedUnstake();
-error UnstakingNotRequested();
-error UnstakingPeriodNotElapsed();
-error UnstakingDurationTooShort();
-error UnstakingDurationTooLong();
-error AmountBelowMinimumStake(uint256 amount);
-error AmountAboveStakingLimit(uint256 amount);
-error AmountExceedsStaked();
-error InvalidPrincipalWalletShare();
-error ZeroAddress();
-error DailyWithdrawalLimitExceeded();
-error InvalidWithdrawalCap(uint256 newBps);
-error InvalidDailyWithdrawalThreshold(uint256 newThreshold);
-error NotPrincipalUnstaker();
-error NotBeneficiary();
+ 
 
 // Events
-event Staked(
-    address indexed beneficiary,
-    uint256 indexed stakingStoreIndex,
-    uint256 amount
-);
-event UnstakeRequested(
-    address indexed requester,
-    uint256 indexed stakingStoreIndex
-);
 
-event Unstaked(
-    uint256 indexed stakingStoreIndex,
-    uint256 principalAmount,
-    uint256 principalWalletReward,
-    uint256 beneficiaryReward,
-    address principalPayoutWallet,
-    address beneficiary
-);
 
-event RewardAdded(
-    uint256 amount,
-    address rewardSender
-);
 
-event PrincipalPayoutWalletUpdated(
-    address oldWallet,
-    address newWallet,
-    uint256 stakingStoreIndex
-);
-event UnstakingDurationUpdated(uint256 oldDuration, uint256 newDuration);
-event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
-event DailyWithdrawalThresholdUpdated(
-    uint256 oldThreshold,
-    uint256 newThreshold
-);
 
-event PrincipalWalletShareUpdateRequested(
-    uint256 indexed stakeId,
-    uint32 newBps,
-    uint256 timestamp
-);
-
-abstract contract DIARewardsDistribution is Ownable {
-    IERC20 public immutable REWARDS_TOKEN;
-
-    address public rewardsWallet;
-
-    error InvalidAddress();
-
-    event RewardsWalletUpdated(address oldWallet, address newWallet);
-
-    constructor(
-        address rewardsTokenAddress,
-        address newRewardsWallet
-    ) {
-        REWARDS_TOKEN = IERC20(rewardsTokenAddress);
-        rewardsWallet = newRewardsWallet;
-    }
-
-    function updateRewardsWallet(address newWalletAddress) external onlyOwner {
-        if (newWalletAddress == address(0)) {
-            revert InvalidAddress();
-        }
-        emit RewardsWalletUpdated(rewardsWallet, newWalletAddress);
-
-        rewardsWallet = newWalletAddress;
-    }
-}
-
-contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution {
+contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistribution {
     using SafeERC20 for IERC20;
 
     mapping(address => uint256[]) internal stakingIndicesByBeneficiary;
@@ -117,7 +37,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
     /// @notice ERC20 token used for staking.
     IERC20 public immutable STAKING_TOKEN;
 
-    struct StakingStore {
+    struct ExternalStakingStore {
         address beneficiary;
         address principalPayoutWallet;
         address principalUnstaker;
@@ -148,10 +68,10 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
     uint256 public withdrawalCapBps = 1000; // 1000 bps = 10%
 
     /// @notice Mapping of staking index to corresponding staking store.
-    mapping(uint256 => StakingStore) public stakingStores;
+    mapping(uint256 => ExternalStakingStore) public stakingStores;
 
     modifier onlyBeneficiaryOrPayoutWallet(uint256 stakingStoreIndex) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         if (
             msg.sender != currentStore.beneficiary &&
@@ -186,7 +106,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
         uint256 _stakingLimit
     )
         Ownable(msg.sender)
-        DIARewardsDistribution(
+        DIAExternalRewardsDistribution(
             _stakingTokenAddress,
             _rewardsWallet
         )
@@ -246,7 +166,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
 
         // Create staking entry
         stakingIndex++;
-        StakingStore storage newStore = stakingStores[stakingIndex];
+        ExternalStakingStore storage newStore = stakingStores[stakingIndex];
         newStore.beneficiary = beneficiaryAddress;
         newStore.principalPayoutWallet = msg.sender;
         newStore.principal = amount;
@@ -351,7 +271,8 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
         address newWallet,
         uint256 stakingStoreIndex
     ) external {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        if (newWallet == address(0)) revert ZeroAddress();
+        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         address oldWallet = currentStore.principalPayoutWallet;
 
@@ -369,7 +290,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
         stakingIndicesByPayoutWallet[newWallet].push(stakingStoreIndex);
 
         emit PrincipalPayoutWalletUpdated(
-            currentStore.principalPayoutWallet,
+            oldWallet,
             newWallet,
             stakingStoreIndex
         );
@@ -385,7 +306,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
         uint256 stakingStoreIndex
     ) external {
         if (newUnstaker == address(0)) revert ZeroAddress();
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
@@ -401,7 +322,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
     function requestUnstake(
         uint256 stakingStoreIndex
     ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
         }
@@ -423,7 +344,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
         onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
         checkDailyWithdrawalLimit(amount)
     {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
         }
@@ -496,6 +417,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIARewardsDistribution 
             currentStore.beneficiary
         );
     }
+ 
 
     function addRewardToPool(uint256 amount) public {
         // Transfer tokens
