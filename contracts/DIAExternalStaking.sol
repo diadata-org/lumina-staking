@@ -372,8 +372,8 @@ contract DIAExternalStaking is
         uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) /
             currentAmountOfPool;
 
-        uint256 rewardToSend = principalUnstakeAmount;
-        uint256 principalToSend = rewardUnstakeAmount;
+        uint256 principalToSend = principalUnstakeAmount;
+        uint256 rewardToSend = rewardUnstakeAmount;
         currentStore.principal =
             currentStore.principal -
             principalUnstakeAmount;
