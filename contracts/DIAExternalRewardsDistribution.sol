@@ -10,9 +10,7 @@ abstract contract DIAExternalRewardsDistribution is Ownable {
 
     error InvalidAddress();
 
-    constructor(
-        address rewardsTokenAddress,
-    ) {
+    constructor(address rewardsTokenAddress) {
         REWARDS_TOKEN = IERC20(rewardsTokenAddress);
     }
 }

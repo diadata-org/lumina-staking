@@ -9,15 +9,11 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./DIAExternalRewardsDistribution.sol";
 import "./DIACommons.sol";
 
-
- 
-
-// Events
-
-
-
-
-contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistribution {
+contract DIAExternalStaking is
+    Ownable,
+    ReentrancyGuard,
+    DIAExternalRewardsDistribution
+{
     using SafeERC20 for IERC20;
 
     mapping(address => uint256[]) internal stakingIndicesByBeneficiary;
@@ -71,7 +67,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
     mapping(uint256 => ExternalStakingStore) public stakingStores;
 
     modifier onlyBeneficiaryOrPayoutWallet(uint256 stakingStoreIndex) {
-        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
 
         if (
             msg.sender != currentStore.beneficiary &&
@@ -103,12 +101,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         uint256 _unstakingDuration,
         address _stakingTokenAddress,
         uint256 _stakingLimit
-    )
-        Ownable(msg.sender)
-        DIAExternalRewardsDistribution(
-            _stakingTokenAddress,
-        )
-    {
+    ) Ownable(msg.sender) DIAExternalRewardsDistribution(_stakingTokenAddress) {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
 
         unstakingDuration = _unstakingDuration;
@@ -269,7 +262,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         uint256 stakingStoreIndex
     ) external {
         if (newWallet == address(0)) revert ZeroAddress();
-        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
 
         address oldWallet = currentStore.principalPayoutWallet;
 
@@ -303,7 +298,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         uint256 stakingStoreIndex
     ) external {
         if (newUnstaker == address(0)) revert ZeroAddress();
-        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
@@ -319,7 +316,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
     function requestUnstake(
         uint256 stakingStoreIndex
     ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
-        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
         }
@@ -328,7 +327,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         emit UnstakeRequested(msg.sender, stakingStoreIndex);
     }
 
-        /**
+    /**
      * @notice Completes the unstaking process after the required duration.
      * @param stakingStoreIndex Index of the staking store.
      */
@@ -341,7 +340,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
         checkDailyWithdrawalLimit(amount)
     {
-        ExternalStakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
         }
@@ -354,22 +355,27 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         }
 
         // Determine how many staking tokens in the pool belong to the unstaker
-        uint256 currentAmountOfPool = (currentStore.poolShares * totalPoolSize) / totalShareAmount;
+        uint256 currentAmountOfPool = (currentStore.poolShares *
+            totalPoolSize) / totalShareAmount;
 
         if (amount > currentAmountOfPool) {
             revert AmountExceedsStaked();
         }
 
         // Determine how much of the requested unstake amount is principal and how much is reward
-        uint256 principalUnstakeAmount = (amount * currentStore.principal) / currentAmountOfPool;
+        uint256 principalUnstakeAmount = (amount * currentStore.principal) /
+            currentAmountOfPool;
         uint256 rewardUnstakeAmount = amount - principalUnstakeAmount;
 
         // Determine how many shares we will deduct for unstaking
-        uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) / currentAmountOfPool;
+        uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) /
+            currentAmountOfPool;
 
         uint256 rewardToSend = principalUnstakeAmount;
         uint256 principalToSend = rewardUnstakeAmount;
-        currentStore.principal = currentStore.principal - principalUnstakeAmount;
+        currentStore.principal =
+            currentStore.principal -
+            principalUnstakeAmount;
         tokensStaked -= amount;
         currentStore.poolShares -= poolSharesUnstakeAmount;
         currentStore.unstakingRequestTime = 0;
@@ -381,12 +387,11 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         totalShareAmount -= poolSharesUnstakeAmount;
 
         uint256 principalWalletReward = (rewardToSend *
-        _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
+            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
 
         if (principalWalletReward > 0) {
-            STAKING_TOKEN.safeTransferFrom(
-                address(this),
+            STAKING_TOKEN.safeTransfer(
                 currentStore.principalPayoutWallet,
                 principalWalletReward
             );
@@ -399,11 +404,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         );
 
         // Send reward to the beneficiary
-        STAKING_TOKEN.safeTransferFrom(
-            address(this),
-            currentStore.beneficiary,
-            beneficiaryReward
-        );
+        STAKING_TOKEN.safeTransfer(currentStore.beneficiary, beneficiaryReward);
 
         emit Unstaked(
             stakingStoreIndex,
@@ -414,7 +415,6 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
             currentStore.beneficiary
         );
     }
- 
 
     function addRewardToPool(uint256 amount) public {
         // Transfer tokens
@@ -439,6 +439,17 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         return stakingStores[stakeId].principalWalletShareBps;
     }
 
+    function getRewardForStakingStore(
+        uint256 stakingStoreIndex
+    ) public view returns (uint256) {
+        ExternalStakingStore storage store = stakingStores[stakingStoreIndex];
+
+        uint256 claimableTokens = (store.poolShares / totalShareAmount) *
+            totalPoolSize;
+
+        return claimableTokens;
+    }
+
     function requestPrincipalWalletShareUpdate(
         uint256 stakeId,
         uint32 newShareBps
@@ -461,4 +472,3 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard, DIAExternalRewardsDistr
         );
     }
 }
-

@@ -1,6 +1,5 @@
 pragma solidity 0.8.29;
 
-
 error AccessDenied();
 error AlreadyRequestedUnstake();
 error UnstakingNotRequested();
@@ -24,7 +23,6 @@ error NotBeneficiary();
 uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
 
-
 event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
 
 event Staked(
@@ -46,10 +44,7 @@ event Unstaked(
     address beneficiary
 );
 
-event RewardAdded(
-    uint256 amount,
-    address rewardSender
-);
+event RewardAdded(uint256 amount, address rewardSender);
 
 event PrincipalPayoutWalletUpdated(
     address oldWallet,
@@ -57,7 +52,7 @@ event PrincipalPayoutWalletUpdated(
     uint256 stakingStoreIndex
 );
 event UnstakingDurationUpdated(uint256 oldDuration, uint256 newDuration);
- event DailyWithdrawalThresholdUpdated(
+event DailyWithdrawalThresholdUpdated(
     uint256 oldThreshold,
     uint256 newThreshold
 );
