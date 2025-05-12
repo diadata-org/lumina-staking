@@ -7,7 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./DIAExternalRewardsDistribution.sol";
-import "./DIACommons.sol";
+import "./StakingErrorsAndEvents.sol";
 
 contract DIAExternalStaking is
     Ownable,
@@ -152,6 +152,7 @@ contract DIAExternalStaking is
         } else {
             poolSharesGiven = (amount * totalPoolSize) / totalShareAmount;
         }
+
         totalShareAmount += poolSharesGiven;
 
         // Create staking entry
