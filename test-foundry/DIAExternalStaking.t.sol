@@ -214,8 +214,54 @@ contract DIAExternalStakingTest is Test {
     }
 
     function test_CompleteUnstake() public {
+        uint256 amount = 1000000;
+        uint32 principalShareBps = 8000;
+
+        vm.startPrank(user1);
+        token.approve(address(staking), amount);
+        staking.stake(amount, principalShareBps);
+        staking.requestUnstake(1);
+        vm.stopPrank();
+
+        // Add rewards round 1
+        vm.startPrank(rewardsWallet);
+        token.transfer(address(staking), 300000);
+        staking.addRewardToPool(100000);
+        vm.stopPrank();
+
+        // Fast forward time
+        vm.warp(block.timestamp + UNSTAKING_DURATION + 1);
+
+        uint256 balanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        // Amount reduced for daily withdrawal limit
+        staking.unstake(1, 1000);
+        uint256 balanceAfter = token.balanceOf(user1);
+
+        assertGt(balanceAfter, balanceBefore);
+
+        // Add rewards round 2
+        vm.startPrank(rewardsWallet);
+        staking.addRewardToPool(100000);
+        vm.stopPrank();
+
+        vm.startPrank(user1);
+        staking.requestUnstake(1);
+				vm.stopPrank();
+
+        // Fast forward time
+        vm.warp(block.timestamp + UNSTAKING_DURATION + 3);
+
+        balanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        // Amount reduced for daily withdrawal limit
+        staking.unstake(1, 200);
+        balanceAfter = token.balanceOf(user1);
+    }
+
+    function test_ExactUnstake() public {
         uint256 amount = 1000 * 10 ** 18;
-        uint32 principalShareBps = 1000;
+        uint32 principalShareBps = 10000;
 
         vm.startPrank(user1);
         token.approve(address(staking), amount);
