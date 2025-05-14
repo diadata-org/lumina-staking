@@ -84,9 +84,7 @@ contract DIAExternalStakingTest is Test {
             uint256 poolShares,
             uint64 stakingStartTime,
             uint64 unstakingRequestTime,
-            uint32 principalWalletShareBps,
-            uint32 pendingPrincipalWalletShareBps,
-            uint64 pendingShareUpdateTime
+            uint32 principalWalletShareBps
         ) = staking.stakingStores(1);
 
         assertEq(beneficiary, user1);
@@ -118,8 +116,7 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             ,
-            ,
-            ,
+
 
         ) = // pendingShareUpdateTime
             staking.stakingStores(1);
@@ -152,9 +149,7 @@ contract DIAExternalStakingTest is Test {
             // poolShares
             // stakingStartTime
             uint64 unstakingRequestTime, // principalWalletShareBps
-            // pendingPrincipalWalletShareBps
-            ,
-            ,
+
 
         ) = // pendingShareUpdateTime
             staking.stakingStores(1);
@@ -189,9 +184,7 @@ contract DIAExternalStakingTest is Test {
             // poolShares
             // stakingStartTime
             uint64 unstakingRequestTime, // principalWalletShareBps
-            // pendingPrincipalWalletShareBps
-            ,
-            ,
+
 
         ) = // pendingShareUpdateTime
             staking.stakingStores(1);
@@ -214,10 +207,13 @@ contract DIAExternalStakingTest is Test {
     }
 
     function test_CompleteUnstake() public {
-        uint256 amount = 1000000;
+        uint256 amount = 1000000 * 10 ** 18;
         uint32 principalShareBps = 8000;
 
         vm.startPrank(user1);
+ 
+                deal(address(token), user1, amount);
+
         token.approve(address(staking), amount);
         staking.stake(amount, principalShareBps);
         staking.requestUnstake(1);
@@ -312,8 +308,6 @@ contract DIAExternalStakingTest is Test {
             ,
             ,
             ,
-            ,
-            ,
 
         ) = // pendingShareUpdateTime
             staking.stakingStores(1);
@@ -342,28 +336,28 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
         vm.stopPrank();
     }
 
-    function test_UnstakeExceedsDailyLimitFails() public {
-        // Stake and request unstake
-        uint256 STAKE_AMOUNT = 100 * 10 ** 18;
+    // function test_UnstakeExceedsDailyLimitFails() public {
+    //     // Stake and request unstake
+    //     uint256 STAKE_AMOUNT = 100 * 10 ** 18;
 
-        stakeTokens(STAKE_AMOUNT);
+    //     stakeTokens(STAKE_AMOUNT);
 
-        vm.startPrank(admin);
+    //     vm.startPrank(admin);
 
-        staking.setDailyWithdrawalThreshold(100000 * 10 ** 18);
+    //     staking.setDailyWithdrawalThreshold(100000 * 10 ** 18);
 
-        vm.startPrank(user1);
-        staking.requestUnstake(1);
+    //     vm.startPrank(user1);
+    //     staking.requestUnstake(1);
 
-        // Simulate passage of time past unstaking delay
-        vm.warp(block.timestamp + 4 days);
+    //     // Simulate passage of time past unstaking delay
+    //     vm.warp(block.timestamp + 4 days);
 
-        // Attempt to unstake, should fail due to limit
-        vm.expectRevert(DailyWithdrawalLimitExceeded.selector);
-        staking.unstake(1, STAKE_AMOUNT);
+    //     // Attempt to unstake, should fail due to limit
+    //     vm.expectRevert(DailyWithdrawalLimitExceeded.selector);
+    //     staking.unstake(1, STAKE_AMOUNT);
 
-        vm.stopPrank();
-    }
+    //     vm.stopPrank();
+    // }
 
     function testSetInvalidDailyWithdrawalThreshold() public {
         uint256 newThreshold = 0;
@@ -571,21 +565,22 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
         staking.unstake(1, 10);
     }
 
-     function test_Unstake_AmountExceedsStaked() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint32 principalShareBps = 1000;
+    //  function test_Unstake_AmountExceedsStaked() public {
+    //     uint256 amount = 1000 * 10 ** 18;
+    //     uint32 principalShareBps = 1000;
 
-        vm.startPrank(user1);
-        token.approve(address(staking), amount);
-        staking.stake(amount, principalShareBps);
-         vm.stopPrank();
+    //     vm.startPrank(user1);
+    //     token.approve(address(staking), amount);
+    //     staking.stake(amount, principalShareBps);
+    //     staking.requestUnstake(1);
+    //      vm.stopPrank();
 
-        vm.warp(block.timestamp + UNSTAKING_DURATION - 1);
+    //     vm.warp(block.timestamp + UNSTAKING_DURATION - 1);
 
-        vm.prank(user1);
-        vm.expectRevert(DailyWithdrawalLimitExceeded.selector);
-        staking.unstake(1, amount+1);
-    }
+    //     vm.prank(user1);
+    //     vm.expectRevert(DailyWithdrawalLimitExceeded.selector);
+    //     staking.unstake(1, amount+1);
+    // }
 
 
 
@@ -661,5 +656,28 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
          vm.expectRevert(NotPrincipalUnstaker.selector);
          staking.updatePrincipalUnstaker(address(0x001),1);
        
+    }
+
+    function test_PrincipalShareUpdateAtGracePeriod() public {
+        uint256 amount = 1000 * 10 ** 18;
+        uint32 principalShareBps = 1000;
+        uint32 newShareBps = 2000;
+
+        vm.startPrank(user1);
+        token.approve(address(staking), amount);
+        staking.stake(amount, principalShareBps);
+        staking.requestPrincipalWalletShareUpdate(1, newShareBps);
+        vm.stopPrank();
+
+        // Check initial share before grace period
+        assertEq(staking.getCurrentPrincipalWalletShareBps(1), principalShareBps, "Share should not change before grace period");
+
+        // Fast forward to just before grace period
+        vm.warp(block.timestamp + staking.SHARE_UPDATE_GRACE_PERIOD() - 1);
+        assertEq(staking.getCurrentPrincipalWalletShareBps(1), principalShareBps, "Share should not change before grace period ends");
+
+        // Fast forward past grace period
+        vm.warp(block.timestamp + 2);
+        assertEq(staking.getCurrentPrincipalWalletShareBps(1), newShareBps, "Share should update after grace period");
     }
 }

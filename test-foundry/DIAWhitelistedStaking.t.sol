@@ -122,7 +122,7 @@ contract DIAWhitelistedStakingTest is Test {
         );
 
         // Verify staking store
-        (address beneficiary, , , uint256 principal, , , , , ,,) = stakingContract
+        (address beneficiary, , , uint256 principal, , , , , ) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -137,7 +137,7 @@ contract DIAWhitelistedStakingTest is Test {
         testStake();
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
-        (, , , , , , , uint256 unstakingRequestTime,,, ) = stakingContract
+        (, , , , , , , uint256 unstakingRequestTime, ) = stakingContract
             .stakingStores(1);
 
         console.log("Unstaking request time", unstakingRequestTime);
@@ -158,7 +158,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.stopPrank();
 
         // Verify reward is zero after unstake (no rewards accumulated in this test)
-        (, , , , uint256 reward, , , ,,, ) = stakingContract.stakingStores(1);
+        (, , , , uint256 reward, , , , ) = stakingContract.stakingStores(1);
         assertEq(reward, 0, "Reward should be zero after unstaking");
     }
 
@@ -327,8 +327,7 @@ contract DIAWhitelistedStakingTest is Test {
                 ,
                 ,
                 ,
-                ,
-                ,
+                
 
             ) = stakingContract.stakingStores(i + 1);
             assertEq(
@@ -376,8 +375,8 @@ contract DIAWhitelistedStakingTest is Test {
             uint256 paidOutReward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
-            ,
-            ,
+            uint32 principalWalletShareBps
+            
 
         ) = stakingContract.stakingStores(1);
 
@@ -411,8 +410,7 @@ contract DIAWhitelistedStakingTest is Test {
             uint256 paidOutReward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
-            ,
-            ,
+
 
         ) = stakingContract.stakingStores(1);
 
@@ -437,7 +435,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         address newPayoutWallet = address(0x9876);
 
-         (, address principalPayoutWallet, , , , , , , ,,) = stakingContract
+         (, address principalPayoutWallet, , , , , , , ) = stakingContract
             .stakingStores(1);
 
             console.log("principalPayoutWallet",principalPayoutWallet);
@@ -449,7 +447,7 @@ contract DIAWhitelistedStakingTest is Test {
         stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
         vm.stopPrank();
 
-        (,   principalPayoutWallet, , , , , , , ,,) = stakingContract
+        (,   principalPayoutWallet, , , , , , , ) = stakingContract
             .stakingStores(1);
 
         assertEq(
@@ -464,7 +462,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         address newPayoutWallet = address(0x9876);
 
-         (, address principalPayoutWallet, , , , , , , ,,) = stakingContract
+         (, address principalPayoutWallet, , , , , , , ) = stakingContract
             .stakingStores(1);
 
             console.log("principalPayoutWallet",principalPayoutWallet);
@@ -676,7 +674,7 @@ contract DIAWhitelistedStakingTest is Test {
      
 
 
-              (address beneficiary, , , uint256 principal, , , , ,,, ) = stakingContract
+              (address beneficiary, , , uint256 principal, , , , , ) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -707,7 +705,7 @@ contract DIAWhitelistedStakingTest is Test {
         console.log("96% Rewards", userRewards);
 
  
-          (  beneficiary, , ,   principal, , , , ,,, ) = stakingContract
+          (  beneficiary, , ,   principal, , , , ,) = stakingContract
             .stakingStores(1);
 
         // Unstake tokens
@@ -850,6 +848,55 @@ contract DIAWhitelistedStakingTest is Test {
 
     //     vm.stopPrank();
     // }
+
+    function test_RevertWhen_InvalidPrincipalShare() public {
+        uint256 amount = 1000 * 10 ** 18;
+        uint32 principalShareBps = 10001; // Above 100%
+
+ 
+
+          vm.prank(owner);
+
+        stakingContract.addWhitelistedStaker(address(user));
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), amount);
+                  vm.expectRevert(InvalidPrincipalWalletShare.selector);
+
+        stakingContract.stakeForAddress(user, amount, principalShareBps);
+
+         vm.stopPrank();
+
+
+
+     }
+
+       function test_RevertWhen_AmountBelowMinimumStake() public {
+        uint256 amount = 0.5 * 10 ** 18;
+        uint32 principalShareBps = 10000; // Above 100%
+
+ 
+
+          vm.prank(owner);
+
+        stakingContract.addWhitelistedStaker(address(user));
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), amount);
+
+      vm.expectRevert(
+            abi.encodeWithSelector(
+                AmountBelowMinimumStake.selector,
+                amount
+            )
+        );
+        stakingContract.stakeForAddress(user, amount, principalShareBps);
+
+         vm.stopPrank();
+
+
+
+     }
+
+     
 
   
 
