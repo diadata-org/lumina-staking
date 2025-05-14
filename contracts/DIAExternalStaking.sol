@@ -44,8 +44,6 @@ contract DIAExternalStaking is
         uint64 stakingStartTime;
         uint64 unstakingRequestTime;
         uint32 principalWalletShareBps;
-        uint32 pendingPrincipalWalletShareBps;
-        uint64 pendingShareUpdateTime;
     }
 
     /// @notice Variables for tracking the pool state and share
