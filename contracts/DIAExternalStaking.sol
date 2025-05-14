@@ -149,15 +149,20 @@ contract DIAExternalStaking is
 				console.log("");
 				console.log("=================");
 				console.log("stake", amount);
-				console.log("=================");
+				console.log("totalPoolSize before", totalPoolSize);
+				console.log("totalShareAmount before", totalShareAmount);
 
-        totalPoolSize += amount;
         uint256 poolSharesGiven = 0;
         if (totalShareAmount == 0) {
             poolSharesGiven = amount;
         } else {
-            poolSharesGiven = (amount * totalPoolSize) / totalShareAmount;
+            poolSharesGiven = (amount * totalShareAmount) / totalPoolSize;
+						console.log("amount", amount);
+						console.log("totalPoolSize", totalPoolSize);
+						console.log("totalShareAmount", totalShareAmount);
         }
+				console.log("poolSharesGiven", poolSharesGiven);
+        totalPoolSize += amount;
 
         totalShareAmount += poolSharesGiven;
 
@@ -179,6 +184,9 @@ contract DIAExternalStaking is
         stakingIndicesByPayoutWallet[msg.sender].push(stakingIndex);
 
         emit Staked(beneficiaryAddress, stakingIndex, amount);
+				console.log("totalPoolSize", totalPoolSize);
+				console.log("totalShareAmount", totalShareAmount);
+				console.log("=================");
     }
 
     /**
@@ -458,6 +466,8 @@ contract DIAExternalStaking is
         emit RewardAdded(amount, msg.sender);
 				console.log("Rewards added", amount);
 				console.log("totalPoolSize", totalPoolSize);
+				console.log("user1 shares", stakingStores[1].poolShares);
+				console.log("user2 shares", stakingStores[2].poolShares);
 				console.log("=================");
     }
 
