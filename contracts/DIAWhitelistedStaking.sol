@@ -266,7 +266,8 @@ contract DIAWhitelistedStaking is
         }
         uint256 passedDays = passedSeconds / (24 * 60 * 60);
 
-        return rewardRatePerDay * passedDays;
+				// assumption: reward rate is measured in bps
+        return (rewardRatePerDay * passedDays * currentStore.principal) / 10000;
     }
 
     /**
