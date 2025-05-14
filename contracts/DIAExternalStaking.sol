@@ -83,13 +83,14 @@ contract DIAExternalStaking is
     }
 
     modifier checkDailyWithdrawalLimit(uint256 amount) {
-        if (tokensStaked < dailyWithdrawalThreshold) {
-            if (block.timestamp / SECONDS_IN_A_DAY > lastWithdrawalResetDay) {
-                totalDailyWithdrawals = 0;
-                lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
-            }
+        if (block.timestamp / SECONDS_IN_A_DAY > lastWithdrawalResetDay) {
+            totalDailyWithdrawals = 0;
+            lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
+        }
 
-            uint256 availableDailyLimit = (tokensStaked * withdrawalCapBps) /
+        // Only check if the whole pool is large enough for the withdrawalThreshold
+        if (totalPoolSize > dailyWithdrawalThreshold) {
+            uint256 availableDailyLimit = (totalPoolSize * withdrawalCapBps) /
                 10000; // Calculate based on bps
             if (totalDailyWithdrawals + amount > availableDailyLimit) {
                 revert DailyWithdrawalLimitExceeded();
