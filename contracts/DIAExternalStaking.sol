@@ -73,6 +73,8 @@ contract DIAExternalStaking is
             stakingStoreIndex
         ];
 
+
+
         if (
             msg.sender != currentStore.beneficiary &&
             msg.sender != currentStore.principalPayoutWallet
@@ -120,7 +122,7 @@ contract DIAExternalStaking is
         uint256 amount,
         uint32 principalWalletShareBps
     ) public nonReentrant {
-        return stakeForAddress(msg.sender, amount, principalWalletShareBps);
+        _stake(msg.sender, amount, principalWalletShareBps, msg.sender);
     }
 
     /**
@@ -132,7 +134,23 @@ contract DIAExternalStaking is
         address beneficiaryAddress,
         uint256 amount,
         uint32 principalWalletShareBps
-    ) public {
+    ) public nonReentrant{
+        _stake(beneficiaryAddress, amount, principalWalletShareBps, msg.sender);
+    }
+
+    /**
+     * @notice Internal function to handle staking logic
+     * @param beneficiaryAddress Address receiving the staking rewards
+     * @param amount Amount of tokens to be staked
+     * @param principalWalletShareBps The share of principal going to the delegator in basis points
+     * @param staker Address performing the stake operation
+     */
+    function _stake(
+        address beneficiaryAddress,
+        uint256 amount,
+        uint32 principalWalletShareBps,
+        address staker
+    ) internal {
         if (amount > (stakingLimit - tokensStaked)) {
             revert AmountAboveStakingLimit(amount);
         }
@@ -145,48 +163,36 @@ contract DIAExternalStaking is
         }
 
         // Transfer tokens
-        STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
-				console.log("");
-				console.log("=================");
-				console.log("stake", amount);
-				console.log("totalPoolSize before", totalPoolSize);
-				console.log("totalShareAmount before", totalShareAmount);
+        STAKING_TOKEN.safeTransferFrom(staker, address(this), amount);
 
         uint256 poolSharesGiven = 0;
         if (totalShareAmount == 0) {
             poolSharesGiven = amount;
         } else {
             poolSharesGiven = (amount * totalShareAmount) / totalPoolSize;
-						console.log("amount", amount);
-						console.log("totalPoolSize", totalPoolSize);
-						console.log("totalShareAmount", totalShareAmount);
         }
-				console.log("poolSharesGiven", poolSharesGiven);
-        totalPoolSize += amount;
 
+        totalPoolSize += amount;
         totalShareAmount += poolSharesGiven;
 
         // Create staking entry
         stakingIndex++;
         ExternalStakingStore storage newStore = stakingStores[stakingIndex];
         newStore.beneficiary = beneficiaryAddress;
-        newStore.principalPayoutWallet = msg.sender;
+        newStore.principalPayoutWallet = staker;
         newStore.principal = amount;
         newStore.poolShares = poolSharesGiven;
         newStore.stakingStartTime = uint64(block.timestamp);
         newStore.principalWalletShareBps = principalWalletShareBps;
-        newStore.principalUnstaker = msg.sender;
+        newStore.principalUnstaker = staker;
 
         // Track stake info
         tokensStaked += amount;
         stakingIndicesByBeneficiary[beneficiaryAddress].push(stakingIndex);
-        stakingIndicesByPrincipalUnstaker[msg.sender].push(stakingIndex);
-        stakingIndicesByPayoutWallet[msg.sender].push(stakingIndex);
+        stakingIndicesByPrincipalUnstaker[staker].push(stakingIndex);
+        stakingIndicesByPayoutWallet[staker].push(stakingIndex);
 
         emit Staked(beneficiaryAddress, stakingIndex, amount);
-				console.log("totalPoolSize", totalPoolSize);
-				console.log("totalShareAmount", totalShareAmount);
-				console.log("=================");
     }
 
     /**
@@ -356,11 +362,11 @@ contract DIAExternalStaking is
         //checkDailyWithdrawalLimit(amount)
 				//TODO: Fix the check
     {
-				console.log("");
-				console.log("=================");
-  			console.log("unstake started...");
-				console.log("amount", amount);
-				console.log("totalPoolSize", totalPoolSize);
+			// 	console.log("");
+			// 	console.log("=================");
+  			// console.log("unstake started...");
+			// 	console.log("amount", amount);
+			// 	console.log("totalPoolSize", totalPoolSize);
         ExternalStakingStore storage currentStore = stakingStores[
             stakingStoreIndex
         ];
@@ -388,14 +394,14 @@ contract DIAExternalStaking is
             currentAmountOfPool;
         uint256 rewardUnstakeAmount = amount - principalUnstakeAmount;
 
-				console.log("principalUnstakeAmount", principalUnstakeAmount);
+				// console.log("principalUnstakeAmount", principalUnstakeAmount);
 
         // Determine how many shares we will deduct for unstaking
         uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) /
             currentAmountOfPool;
 
-				console.log("poolSharesUnstakeAmount", poolSharesUnstakeAmount);
-				console.log("totalShareAmount", totalShareAmount);
+				// console.log("poolSharesUnstakeAmount", poolSharesUnstakeAmount);
+				// console.log("totalShareAmount", totalShareAmount);
 
         uint256 principalToSend = principalUnstakeAmount;
         uint256 rewardToSend = rewardUnstakeAmount;
@@ -441,34 +447,34 @@ contract DIAExternalStaking is
             currentStore.beneficiary
         );
 
-				console.log("-------");
-				console.log("Payouts");
-				console.log("beneficiaryReward", beneficiaryReward);
-				console.log("principalWalletReward", principalWalletReward);
-				console.log("principalToSend", principalToSend);
+				// console.log("-------");
+				// console.log("Payouts");
+				// console.log("beneficiaryReward", beneficiaryReward);
+				// console.log("principalWalletReward", principalWalletReward);
+				// console.log("principalToSend", principalToSend);
 
-				console.log("-------");
-				console.log("After");
-				console.log("totalShareAmount", totalShareAmount);
-				console.log("totalPoolSize", totalPoolSize);
-				console.log("currentStore.poolShares", currentStore.poolShares);
-				console.log("=================");
+				// console.log("-------");
+				// console.log("After");
+				// console.log("totalShareAmount", totalShareAmount);
+				// console.log("totalPoolSize", totalPoolSize);
+				// console.log("currentStore.poolShares", currentStore.poolShares);
+				// console.log("=================");
     }
 
     function addRewardToPool(uint256 amount) public {
         // Transfer tokens
         STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
 
-				console.log("");
-				console.log("=================");
-				console.log("totalPoolSize before", totalPoolSize);
+				// console.log("");
+				// console.log("=================");
+				// console.log("totalPoolSize before", totalPoolSize);
         totalPoolSize += amount;
         emit RewardAdded(amount, msg.sender);
-				console.log("Rewards added", amount);
-				console.log("totalPoolSize", totalPoolSize);
-				console.log("user1 shares", stakingStores[1].poolShares);
-				console.log("user2 shares", stakingStores[2].poolShares);
-				console.log("=================");
+				// console.log("Rewards added", amount);
+				// console.log("totalPoolSize", totalPoolSize);
+				// console.log("user1 shares", stakingStores[1].poolShares);
+				// console.log("user2 shares", stakingStores[2].poolShares);
+				// console.log("=================");
     }
 
     function _getCurrentPrincipalWalletShareBps(
