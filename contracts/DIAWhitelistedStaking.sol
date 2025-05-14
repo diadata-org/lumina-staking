@@ -68,7 +68,7 @@ contract DIAWhitelistedStaking is
         address beneficiaryAddress,
         uint256 amount,
         uint32 principalWalletShareBps
-    ) public {
+    ) public nonReentrant{
         if (!stakingWhitelist[beneficiaryAddress]) {
             revert NotWhitelisted();
         }
@@ -85,8 +85,11 @@ contract DIAWhitelistedStaking is
      * @notice Allows a user to stake tokens directly.
      * @param amount The amount of tokens to stake.
      */
-    function stake(uint256 amount) external {
-        return stakeForAddress(msg.sender, amount, 10_000);
+    function stake(uint256 amount) external nonReentrant {
+          if (!stakingWhitelist[msg.sender]) {
+            revert NotWhitelisted();
+        }
+          _internalStakeForAddress(msg.sender,msg.sender,amount, 10_000);
     }
 
     /**
