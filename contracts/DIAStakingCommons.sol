@@ -8,6 +8,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./StakingErrorsAndEvents.sol";
 
+import "forge-std/console.sol";
+
 // Events
 
 abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
@@ -73,7 +75,9 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
     }
 
     modifier checkDailyWithdrawalLimit(uint256 amount) {
-        if (tokensStaked < dailyWithdrawalThreshold) {
+				console.log("tokensStaked", tokensStaked);
+				console.log("dailyWithdrawalThreshold", dailyWithdrawalThreshold);
+        if (tokensStaked > dailyWithdrawalThreshold) {
             if (block.timestamp / SECONDS_IN_A_DAY > lastWithdrawalResetDay) {
                 totalDailyWithdrawals = 0;
                 lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
