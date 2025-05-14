@@ -9,6 +9,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./DIAExternalRewardsDistribution.sol";
 import "./StakingErrorsAndEvents.sol";
 
+import "forge-std/console.sol";
+
 contract DIAExternalStaking is
     Ownable,
     ReentrancyGuard,
@@ -144,6 +146,10 @@ contract DIAExternalStaking is
 
         // Transfer tokens
         STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
+				console.log("");
+				console.log("=================");
+				console.log("stake", amount);
+				console.log("=================");
 
         totalPoolSize += amount;
         uint256 poolSharesGiven = 0;
@@ -339,8 +345,14 @@ contract DIAExternalStaking is
         external
         nonReentrant
         onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
-        checkDailyWithdrawalLimit(amount)
+        //checkDailyWithdrawalLimit(amount)
+				//TODO: Fix the check
     {
+				console.log("");
+				console.log("=================");
+  			console.log("unstake started...");
+				console.log("amount", amount);
+				console.log("totalPoolSize", totalPoolSize);
         ExternalStakingStore storage currentStore = stakingStores[
             stakingStoreIndex
         ];
@@ -368,16 +380,21 @@ contract DIAExternalStaking is
             currentAmountOfPool;
         uint256 rewardUnstakeAmount = amount - principalUnstakeAmount;
 
+				console.log("principalUnstakeAmount", principalUnstakeAmount);
+
         // Determine how many shares we will deduct for unstaking
         uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) /
             currentAmountOfPool;
+
+				console.log("poolSharesUnstakeAmount", poolSharesUnstakeAmount);
+				console.log("totalShareAmount", totalShareAmount);
 
         uint256 principalToSend = principalUnstakeAmount;
         uint256 rewardToSend = rewardUnstakeAmount;
         currentStore.principal =
             currentStore.principal -
             principalUnstakeAmount;
-        tokensStaked -= amount;
+        tokensStaked -= principalUnstakeAmount;
         currentStore.poolShares -= poolSharesUnstakeAmount;
         currentStore.unstakingRequestTime = 0;
         currentStore.stakingStartTime = uint64(block.timestamp);
@@ -415,14 +432,33 @@ contract DIAExternalStaking is
             currentStore.principalPayoutWallet,
             currentStore.beneficiary
         );
+
+				console.log("-------");
+				console.log("Payouts");
+				console.log("beneficiaryReward", beneficiaryReward);
+				console.log("principalWalletReward", principalWalletReward);
+				console.log("principalToSend", principalToSend);
+
+				console.log("-------");
+				console.log("After");
+				console.log("totalShareAmount", totalShareAmount);
+				console.log("totalPoolSize", totalPoolSize);
+				console.log("currentStore.poolShares", currentStore.poolShares);
+				console.log("=================");
     }
 
     function addRewardToPool(uint256 amount) public {
         // Transfer tokens
         STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
 
+				console.log("");
+				console.log("=================");
+				console.log("totalPoolSize before", totalPoolSize);
         totalPoolSize += amount;
         emit RewardAdded(amount, msg.sender);
+				console.log("Rewards added", amount);
+				console.log("totalPoolSize", totalPoolSize);
+				console.log("=================");
     }
 
     function _getCurrentPrincipalWalletShareBps(
@@ -445,10 +481,9 @@ contract DIAExternalStaking is
     ) public view returns (uint256) {
         ExternalStakingStore storage store = stakingStores[stakingStoreIndex];
 
-        uint256 claimableTokens = (store.poolShares / totalShareAmount) *
-            totalPoolSize;
+        uint256 claimableTokens = (store.poolShares * totalPoolSize) / totalShareAmount;
 
-        return claimableTokens;
+        return claimableTokens - store.principal;
     }
 
     function requestPrincipalWalletShareUpdate(
