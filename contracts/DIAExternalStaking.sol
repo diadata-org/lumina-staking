@@ -490,6 +490,17 @@ contract DIAExternalStaking is
         return stakingStores[stakeId].principalWalletShareBps;
     }
 
+    /**
+     * @notice Get the current principal wallet share basis points for a stake
+     * @param stakeId The ID of the stake to check
+     * @return The current principal wallet share in basis points
+     */
+    function getCurrentPrincipalWalletShareBps(
+        uint256 stakeId
+    ) public view returns (uint32) {
+        return _getCurrentPrincipalWalletShareBps(stakeId);
+    }
+
     function getRewardForStakingStore(
         uint256 stakingStoreIndex
     ) public view returns (uint256) {
