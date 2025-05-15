@@ -98,7 +98,7 @@ contract DIAWhitelistedStaking is
      */
     function unstake(
         uint256 stakingStoreIndex
-    ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
+    ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant  {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
@@ -158,7 +158,7 @@ contract DIAWhitelistedStaking is
     function unstakePrincipal(
         uint256 stakingStoreIndex,
         uint256 amount
-    ) external checkDailyWithdrawalLimit(amount) nonReentrant {
+    ) external  nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         if (currentStore.unstakingRequestTime == 0) {

@@ -70,23 +70,7 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         _;
     }
 
-    modifier checkDailyWithdrawalLimit(uint256 amount) {
-        if (tokensStaked > dailyWithdrawalThreshold) {
-            if (block.timestamp / SECONDS_IN_A_DAY > lastWithdrawalResetDay) {
-                totalDailyWithdrawals = 0;
-                lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
-            }
 
-            uint256 availableDailyLimit = (tokensStaked * withdrawalCapBps) /
-                10000; // Calculate based on bps
-
-            if (totalDailyWithdrawals + amount > availableDailyLimit) {
-                revert DailyWithdrawalLimitExceeded();
-            }
-        }
-
-        _;
-    }
 
     /**
      * @notice Updates the duration required before unstaking can be completed.
