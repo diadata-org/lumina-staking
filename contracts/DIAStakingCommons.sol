@@ -42,8 +42,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         uint64 stakingStartTime;
         uint64 unstakingRequestTime;
         uint32 principalWalletShareBps;
-        uint32 pendingPrincipalWalletShareBps;
-        uint64 pendingShareUpdateTime;
     }
 
     uint256 public tokensStaked;
