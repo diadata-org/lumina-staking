@@ -1,10 +1,9 @@
-
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.23;
 
 contract WDIA {
-    string public name = "Wrapped Ether";
-    string public symbol = "WETH";
+    string public name = "Wrapped DIA";
+    string public symbol = "DIA";
     uint8 public decimals = 18;
 
     event Approval(address indexed src, address indexed guy, uint wad);
@@ -63,4 +62,3 @@ contract WDIA {
         return true;
     }
 }
-

@@ -2,8 +2,18 @@
 src = "contracts"           
 out = "out"                 
 libs = ["node_modules", "lib"]     
-solc_version = "0.8.29"     
+solc = "0.8.29"     
 test = "test-foundry"
 gas_price = 10
 gas_reports = ["*"]
 remappings = ["@openzeppelin=lib/openzeppelin-contracts/"]
+optimizer = true
+optimizer_runs = 200
+skip = ["WDIA.sol"]
+
+
+[rpc_endpoints]
+laser = "https://rpc-dia-lasernet-dipfsyyx2w.t.conduit.xyz"
+
+[profile.legacy]
+solc = "0.4.23"
