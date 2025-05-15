@@ -70,8 +70,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         _;
     }
 
-
-
     /**
      * @notice Updates the duration required before unstaking can be completed.
      * @dev Only callable by the contract owner.

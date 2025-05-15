@@ -22,14 +22,30 @@ contract DIAWhitelistedStaking is
 {
     using SafeERC20 for IERC20;
 
-    /// @notice Mapping of whitelisted addresses for staking.
+    /// @notice Mapping of whitelisted addresses for staking
+    /// @dev Maps address to boolean indicating if address is whitelisted
     mapping(address => bool) public stakingWhitelist;
 
-    /// @notice Emitted when a new staker is added to the whitelist.
+    /// @notice Emitted when a new staker is added to the whitelist
+    /// @param newStaker The address that was added to the whitelist
     event StakerAddressAdded(address newStaker);
 
-    /// @notice Emitted when a staker is removed from the whitelist.
+    /// @notice Emitted when a staker is removed from the whitelist
+    /// @param removedStaker The address that was removed from the whitelist
     event StakerAddressRemoved(address removedStaker);
+
+    /// @notice Emitted when daily withdrawal threshold is updated
+    /// @param oldThreshold The previous threshold value
+    /// @param newThreshold The new threshold value
+    event DailyWithdrawalThresholdUpdated(
+        uint256 oldThreshold,
+        uint256 newThreshold
+    );
+
+    /// @notice Emitted when withdrawal cap is updated
+    /// @param oldCap The previous cap value in basis points
+    /// @param newCap The new cap value in basis points
+    event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
 
     /// @notice Errors
     error AlreadyWhitelisted();
@@ -60,9 +76,11 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Stakes tokens on behalf of a given address.
-     * @param beneficiaryAddress Address receiving the staking rewards.
-     * @param amount Amount of tokens to be staked.
+     * @notice Stakes tokens on behalf of a given address
+     * @param beneficiaryAddress Address receiving the staking rewards
+     * @param amount Amount of tokens to be staked
+     * @param principalWalletShareBps Share of rewards going to principal wallet in basis points
+     * @custom:revert NotWhitelisted if beneficiary is not whitelisted
      */
     function stakeForAddress(
         address beneficiaryAddress,
@@ -82,8 +100,9 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Allows a user to stake tokens directly.
-     * @param amount The amount of tokens to stake.
+     * @notice Allows a user to stake tokens directly
+     * @param amount The amount of tokens to stake
+     * @custom:revert NotWhitelisted if caller is not whitelisted
      */
     function stake(uint256 amount) external nonReentrant {
         if (!stakingWhitelist[msg.sender]) {
@@ -93,12 +112,16 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Completes the unstaking process after the required duration.
-     * @param stakingStoreIndex Index of the staking store.
+     * @notice Completes the unstaking process after the required duration
+     * @dev Checks daily withdrawal limits before processing
+     * @param stakingStoreIndex Index of the staking store
+     * @custom:revert DailyWithdrawalLimitExceeded if withdrawal would exceed daily limit
+     * @custom:revert UnstakingNotRequested if unstaking was not requested
+     * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
      */
     function unstake(
         uint256 stakingStoreIndex
-    ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant  {
+    ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
@@ -130,7 +153,6 @@ contract DIAWhitelistedStaking is
             );
         }
 
-        // Send tokens to beneficiary
         STAKING_TOKEN.safeTransferFrom(
             rewardsWallet,
             currentStore.beneficiary,
@@ -151,14 +173,19 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Unstakes the principal amount immediately.
-     * @dev Only possible for the principal unstaker or the global owner
-     * @param stakingStoreIndex Index of the staking store.
+     * @notice Unstakes the principal amount immediately
+     * @dev Only possible for the principal unstaker
+     * @param stakingStoreIndex Index of the staking store
+     * @param amount Amount of principal to unstake
+     * @custom:revert NotPrincipalUnstaker if caller is not the principal unstaker
+     * @custom:revert UnstakingNotRequested if unstaking was not requested
+     * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
+     * @custom:revert AmountExceedsStaked if amount exceeds staked principal
      */
     function unstakePrincipal(
         uint256 stakingStoreIndex,
         uint256 amount
-    ) external  nonReentrant {
+    ) external nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         if (currentStore.unstakingRequestTime == 0) {
@@ -226,13 +253,12 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Adds an address to the whitelist for staking.
-     * @dev Only callable by the contract owner.
-     * @param newStakerAddress The address to be whitelisted.
-     * @custom:revert AlreadyWhitelisted() if the address is already whitelisted.
-     * @custom:event Emits `StakerAddressAdded` on success.
+     * @notice Adds an address to the whitelist for staking
+     * @dev Only callable by the contract owner
+     * @param newStakerAddress The address to be whitelisted
+     * @custom:revert AlreadyWhitelisted if the address is already whitelisted
+     * @custom:event Emits StakerAddressAdded on success
      */
-
     function addWhitelistedStaker(address newStakerAddress) external onlyOwner {
         if (stakingWhitelist[newStakerAddress]) {
             revert AlreadyWhitelisted();
@@ -242,11 +268,11 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Removes an address from the staking whitelist.
-     * @dev Only callable by the contract owner.
-     * @param stakerAddressToRemove The address to remove from the whitelist.
-     * @custom:revert NotWhitelisted() if the address is not currently whitelisted.
-     * @custom:event Emits `StakerAddressRemoved` on success.
+     * @notice Removes an address from the staking whitelist
+     * @dev Only callable by the contract owner
+     * @param stakerAddressToRemove The address to remove from the whitelist
+     * @custom:revert NotWhitelisted if the address is not currently whitelisted
+     * @custom:event Emits StakerAddressRemoved on success
      */
     function removeWhitelistedStaker(
         address stakerAddressToRemove
@@ -259,10 +285,10 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Calculates the accrued reward for a given staking store.
-     * @dev The reward is calculated based on the number of full days passed since staking started.
-     * @param stakingStoreIndex The index of the staking store.
-     * @return The total reward accumulated so far.
+     * @notice Calculates the accrued reward for a given staking store
+     * @dev The reward is calculated based on the number of full days passed since staking started
+     * @param stakingStoreIndex The index of the staking store
+     * @return The total reward accumulated so far
      */
     function getRewardForStakingStore(
         uint256 stakingStoreIndex
@@ -285,10 +311,10 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Updates the reward amount for a given staking store.
-     * @dev Ensures the reward does not decrease.
-     * @param stakingStoreIndex The index of the staking store.
-     * @custom:assert The newly calculated reward must be greater than or equal to the current reward.
+     * @notice Updates the reward amount for a given staking store
+     * @dev Ensures the reward does not decrease
+     * @param stakingStoreIndex The index of the staking store
+     * @custom:assert The newly calculated reward must be greater than or equal to the current reward
      */
     function updateReward(uint256 stakingStoreIndex) internal {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
