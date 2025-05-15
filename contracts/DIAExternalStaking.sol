@@ -110,6 +110,7 @@ contract DIAExternalStaking is
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
         stakingLimit = _stakingLimit;
+        lastWithdrawalResetDay = block.timestamp;
     }
 
     /**
@@ -358,8 +359,7 @@ contract DIAExternalStaking is
         external
         nonReentrant
         onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
-        //checkDailyWithdrawalLimit(amount)
-				//TODO: Fix the check
+        checkDailyWithdrawalLimit(amount)
     {
 			// 	console.log("");
 			// 	console.log("=================");
