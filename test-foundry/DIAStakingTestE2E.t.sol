@@ -91,6 +91,7 @@ contract DIAStakingTestE2E is Test {
         whitelistStaking.setWithdrawalCapBps(10000);
 
         // Configure contracts
+        //externalStaking.setDailyWithdrawalThreshold(10_000 * 10 ** 18);
         externalStaking.setDailyWithdrawalThreshold(10_000);
         
         // Fund rewards wallet
@@ -514,6 +515,7 @@ function _processWhitelistPartialUnstake(uint256 stakerIndex) internal {
     // Helper to process external staking unstake
     function _processExternalUnstake(uint256 stakerIndex) internal {
         uint256[] memory indices = externalStaking.getStakingIndicesByBeneficiary(externalStakers[stakerIndex]);
+        skip(1 days);
 
         uint256 rewards = externalStaking.getRewardForStakingStore(indices[0]);
         
