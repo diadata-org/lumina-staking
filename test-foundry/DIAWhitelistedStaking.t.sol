@@ -237,31 +237,22 @@ contract DIAWhitelistedStakingTest is Test {
 
     function testUnAuthorizedUnstake() public {
         testStake();
+                vm.warp(block.timestamp + 4 days);
+
+  
+
+       
+
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
+                vm.warp(block.timestamp + 60 days);
 
-
-        // Fast-forward time by 4 days
-        vm.warp(block.timestamp + 4 days);
-
-        stakingContract.unstake(1);
-
-        uint256 rewardBeforeUnstake = stakingContract.getRewardForStakingStore(
-            1
-        );
-
-        console.log("INITIAL_USER_BALANCE", INITIAL_USER_BALANCE);
-        console.log(
-            "rewardBeforeUnstake unstakePrincipal",
-            rewardBeforeUnstake
-        );
-
-        
+         
 
         vm.startPrank(address(0x001));
 
         vm.expectRevert(NotPrincipalUnstaker.selector);
-        stakingContract.unstakePrincipal(1);
+        stakingContract.unstakePrincipal(1,100);
 
         vm.stopPrank();
 
@@ -896,8 +887,187 @@ contract DIAWhitelistedStakingTest is Test {
 
      }
 
-     
+    function test_GetCurrentPrincipalWalletShareBps() public {
+        // Setup initial stake with 50% share
+        vm.startPrank(owner);
+        stakingContract.addWhitelistedStaker(user);
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT);
+        stakingContract.stake(STAKE_AMOUNT);
+        vm.stopPrank();
 
-  
+        // Check initial share (should be 0% as no share was specified)
+        uint32 initialShare = stakingContract.getCurrentPrincipalWalletShareBps(1);
+        assertEq(initialShare, 10000, "Initial share should be 100%");
+
+        // Request share update to 75%
+        vm.startPrank(user);
+        stakingContract.requestPrincipalWalletShareUpdate(1, 7500);
+        vm.stopPrank();
+
+        // Check share before grace period (should still be 0%)
+        uint32 shareBeforeGrace = stakingContract.getCurrentPrincipalWalletShareBps(1);
+        assertEq(shareBeforeGrace, 10000, "Share should not change before grace period");
+
+        // Fast forward to just before grace period
+        vm.warp(block.timestamp + stakingContract.SHARE_UPDATE_GRACE_PERIOD() - 1);
+        uint32 shareJustBeforeGrace = stakingContract.getCurrentPrincipalWalletShareBps(1);
+        assertEq(shareJustBeforeGrace, 10000, "Share should not change before grace period ends");
+
+        // Fast forward past grace period
+        vm.warp(block.timestamp + 2);
+        uint32 shareAfterGrace = stakingContract.getCurrentPrincipalWalletShareBps(1);
+        assertEq(shareAfterGrace, 7500, "Share should update to 75% after grace period");
+    }
+
+    function test_UnstakePrincipal() public {
+        // Setup initial stake
+        vm.startPrank(owner);
+        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
+        deal(address(stakingToken), user, STAKE_AMOUNT *2);
+        stakingContract.setWithdrawalCapBps(10000);
+        stakingContract.addWhitelistedStaker(user);
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
+        stakingContract.stake(STAKE_AMOUNT);
+        stakingContract.stake(STAKE_AMOUNT);
+
+        vm.stopPrank();
+
+        // Request unstake
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+        vm.stopPrank();
+
+        // Fast forward past unstaking period
+        vm.warp(block.timestamp + stakingContract.unstakingDuration() + 1);
+
+        // Get initial balances
+        uint256 initialPrincipalBalance = stakingToken.balanceOf(user);
+        uint256 initialContractBalance = stakingToken.balanceOf(address(stakingContract));
+
+        // Unstake principal
+        vm.startPrank(user);
+        stakingContract.unstakePrincipal(1, STAKE_AMOUNT);
+        vm.stopPrank();
+
+        // Verify balances
+        uint256 finalPrincipalBalance = stakingToken.balanceOf(user);
+        uint256 finalContractBalance = stakingToken.balanceOf(address(stakingContract));
+
+        assertEq(
+            finalPrincipalBalance - initialPrincipalBalance,
+            STAKE_AMOUNT,
+            "Principal amount should be returned to user"
+        );
+        assertEq(
+            initialContractBalance - finalContractBalance,
+            STAKE_AMOUNT,
+            "Contract balance should decrease by principal amount"
+        );
+    }
+
+    function test_UnstakePrincipal_NotPrincipalUnstaker() public {
+        // Setup initial stake
+        vm.startPrank(owner);
+        stakingContract.addWhitelistedStaker(user);
+        deal(address(stakingToken), user, STAKE_AMOUNT *2);
+        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
+        stakingContract.setWithdrawalCapBps(10000);
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
+        stakingContract.stake(STAKE_AMOUNT);
+        stakingContract.stake(STAKE_AMOUNT);
+
+        vm.stopPrank();
+
+        // Request unstake
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+        vm.stopPrank();
+
+        // Fast forward past unstaking period
+        vm.warp(block.timestamp + stakingContract.unstakingDuration() + 1);
+
+        // Try to unstake with different address
+        vm.startPrank(address(0x1234));
+        vm.expectRevert(NotPrincipalUnstaker.selector);
+        stakingContract.unstakePrincipal(1, STAKE_AMOUNT);
+        vm.stopPrank();
+    }
+
+    function test_UnstakePrincipal_UnstakingNotRequested() public {
+        // Setup initial stake
+        vm.startPrank(owner);
+        stakingContract.addWhitelistedStaker(user);
+        deal(address(stakingToken), user, STAKE_AMOUNT *2);
+        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
+        stakingContract.setWithdrawalCapBps(10000);
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
+        stakingContract.stake(STAKE_AMOUNT);
+        stakingContract.stake(STAKE_AMOUNT);
+
+
+        // Try to unstake without requesting
+        vm.startPrank(user);
+        vm.expectRevert(UnstakingNotRequested.selector);
+        stakingContract.unstakePrincipal(1, STAKE_AMOUNT);
+        vm.stopPrank();
+    }
+
+    function test_UnstakePrincipal_PeriodNotElapsed() public {
+        // Setup initial stake
+       vm.startPrank(owner);
+        stakingContract.addWhitelistedStaker(user);
+        deal(address(stakingToken), user, STAKE_AMOUNT *2);
+        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
+        stakingContract.setWithdrawalCapBps(10000);
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
+        stakingContract.stake(STAKE_AMOUNT);
+        stakingContract.stake(STAKE_AMOUNT);
+
+
+        // Request unstake
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+        vm.stopPrank();
+
+        // Try to unstake before period elapsed
+        vm.startPrank(user);
+        vm.expectRevert(UnstakingPeriodNotElapsed.selector);
+        stakingContract.unstakePrincipal(1, STAKE_AMOUNT);
+        vm.stopPrank();
+    }
+
+    function test_UnstakePrincipal_AmountExceedsStaked() public {
+        // Setup initial stake
+        vm.startPrank(owner);
+        deal(address(stakingToken), user, STAKE_AMOUNT * 2);
+        stakingContract.addWhitelistedStaker(user);
+        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
+        stakingContract.setWithdrawalCapBps(10000);
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
+        stakingContract.stake(STAKE_AMOUNT);
+        stakingContract.stake(STAKE_AMOUNT);
+
+        vm.stopPrank();
+
+        // Request unstake
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+        vm.stopPrank();
+
+        // Fast forward past unstaking period
+        vm.warp(block.timestamp + stakingContract.unstakingDuration() + 1);
+
+        // Try to unstake more than staked
+        vm.startPrank(user);
+        vm.expectRevert(AmountExceedsStaked.selector);
+        stakingContract.unstakePrincipal(1, STAKE_AMOUNT + 1);
+        vm.stopPrank();
+    }
 
 }

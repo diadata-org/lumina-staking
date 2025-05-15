@@ -66,9 +66,9 @@ contract StakingComparisonTest is Test {
             string.concat(
                 pad(vm.toString(day), 2),
                 " | ",
-                pad(vm.toString(wlReward), 10),
+                pad(getEthString(wlReward), 10),
                 " | ",
-                pad(vm.toString(exReward), 10)
+                pad(getEthString(exReward), 10)
             )
         );
     }
@@ -82,22 +82,70 @@ contract StakingComparisonTest is Test {
 }
 
     function test_DailyUnstakeComparison() public {
-        console.log("Days | WL Reward | EX Reward");
+        console.log("\n=== Daily Unstake Comparison Test ===");
+        console.log("Note: Small rounding differences (1-2 wei) may occur due to integer division in Solidity");
+        console.log("\nDays | WL Unstake | EX Unstake | WL Principal | EX Principal");
+        console.log("--------------------------------------------------------");
 
         for (uint256 daysStaked = 1; daysStaked <= 15; daysStaked++) {
-            simulateSingleContractCycle(daysStaked);
+            // Setup contracts and tokens
+            (MockToken stakingToken, DIAWhitelistedStaking wl, DIAExternalStaking ex) = setupContracts();
+            
+            
+            // Perform staking operations
+            performStaking(stakingToken, wl, ex);
+            
+            // Wait for staking period and request unstake
+            // skip(daysStaked * 1 days);
+
+            for (uint256 i = 0; i < daysStaked; i++) {
+                vm.prank(rewardsWallet);
+                ex.addRewardToPool(12 * 1e18);
+                skip(1 days);
+            }
+            requestUnstake(wl, ex);
+            
+            // Add rewards and wait for unstaking delay
+            vm.prank(rewardsWallet);
+            skip(1 days);
+
+            // Get balances before unstaking
+            uint256 wlBefore = stakingToken.balanceOf(userWl);
+            uint256 exBefore = stakingToken.balanceOf(userEx);
+
+            // Perform unstaking
+            vm.prank(userWl);
+            wl.unstake(1);
+            
+
+            uint256 rewards = ex.getRewardForStakingStore(1);
+            vm.prank(userEx);
+            ex.unstake(1, 10000 * 10e18 + rewards);
+ 
+            // Calculate results
+            uint256 wlReceived = stakingToken.balanceOf(userWl) ;
+            uint256 exReceived = stakingToken.balanceOf(userEx) - exBefore;
+
+
+ 
+            // uint256 wlReward = wlReceived  
+            // uint256 exReward = exReceived 
+
+            // Print results
+            printComparisonRow(daysStaked, wlReceived, exReceived, 10000 * 10e18, 10000 * 10e18);
         }
+
+        console.log("\n=== Test Completed ===");
+        console.log("Note: All amounts shown in DIA tokens");
     }
 
-    function simulateSingleContractCycle(uint256 daysStaked) internal {
+    function setupContracts() internal returns (MockToken, DIAWhitelistedStaking, DIAExternalStaking) {
         uint256 principal = 10000 * 10e18;
-        uint256 rewardRatePerDay = 12 * 1e18;
+        uint256 rewardRatePerDay = 12 ;
 
-        // Deploy new token and mint balances
         MockToken stakingToken = new MockToken("Mock", "MCK", 18);
         stakingToken.mint(userWl, principal * 2);
         stakingToken.mint(userEx, principal * 2);
-
         stakingToken.mint(rewardsWallet, principal * 100);
 
         DIAWhitelistedStaking wl = new DIAWhitelistedStaking(
@@ -117,82 +165,53 @@ contract StakingComparisonTest is Test {
         ex.setWithdrawalCapBps(10000);
         wl.setWithdrawalCapBps(10000);
 
-        vm.prank(rewardsWallet);
+        return (stakingToken, wl, ex);
+    }
+
+    function performStaking(MockToken stakingToken, DIAWhitelistedStaking wl, DIAExternalStaking ex) internal {
+        vm.startPrank(rewardsWallet);
         stakingToken.approve(address(ex), type(uint256).max);
-   
-
-        // userwl stake to wl
-        vm.startPrank(userWl);
-
-        // Approvals and setup
         stakingToken.approve(address(wl), type(uint256).max);
+        vm.stopPrank();
 
-        // Stake
-        wl.stake(principal);
-
+        vm.startPrank(userWl);
+        stakingToken.approve(address(wl), type(uint256).max);
+        wl.stake(10000 * 10e18);
         vm.stopPrank();
 
         vm.startPrank(userEx);
         stakingToken.approve(address(ex), type(uint256).max);
-
-        ex.stake(principal, 0);
+        ex.stake(10000 * 10e18, 0);
         vm.stopPrank();
+    }
 
-        vm.startPrank(rewardsWallet);
-        stakingToken.approve(address(wl), type(uint256).max);
-        stakingToken.approve(address(ex), type(uint256).max);
-        vm.stopPrank();
-
-        // Wait for `daysStaked` days
-        skip(daysStaked * 1 days);
-
-        // Request unstake
+    function requestUnstake(DIAWhitelistedStaking wl, DIAExternalStaking ex) internal {
         vm.prank(userWl);
         wl.requestUnstake(1);
         vm.prank(userEx);
         ex.requestUnstake(1);
+    }
 
-             vm.prank(rewardsWallet);
-
-        ex.addRewardToPool(rewardRatePerDay);
-
-        skip(1 days); // unstaking delay
-
-        // Unstake and check rewards
-        uint256 wlBefore = stakingToken.balanceOf(userWl);
-        uint256 exBefore = stakingToken.balanceOf(userEx);
-
-        (, , , uint256 wlPrincipal, , , , ,  ) = wl.stakingStores(1);
-
-        (, , , uint256 exPrincipal, , , , ) = ex.stakingStores(1);
-
-        vm.prank(userWl);
-        wl.unstake(1);
-                        uint256 rewards = ex.getRewardForStakingStore(1);
-
-        vm.prank(userEx);
-
-        ex.unstake(1, exPrincipal + rewards);
-
-        uint256 wlAfter = stakingToken.balanceOf(userWl);
-        uint256 exAfter = stakingToken.balanceOf(userEx);
-
-        // console.log("exBefore",exBefore);
-        // console.log("exAfter",exAfter);
-
-        // console.log("wlBefore",wlBefore);
-        //         console.log("wlAfter",wlAfter);
-
-        uint256 wlReceived = wlAfter > wlBefore ? wlAfter - wlBefore : 0;
-
-        uint256 exReceived = exAfter > exBefore ? exAfter - exBefore : 0;
-
-        // console.log("exPrincipal",exPrincipal);
-        // console.log("exReceived",exReceived);
-
-        // console.log("wlPrincipal",wlPrincipal);
-
-        printRow(daysStaked, wlReceived, exReceived-exPrincipal );
+    function printComparisonRow(
+        uint256 day,
+        uint256 wlReceived,
+        uint256 exReceived,
+        uint256 wlReward,
+        uint256 exReward
+    ) internal {
+        console.log(
+            string.concat(
+                pad(vm.toString(day), 4),
+                " | ",
+                pad(getEthString(wlReceived), 10),
+                " | ",
+                pad(getEthString(exReceived), 10),
+                " | ",
+                pad(getEthString(wlReward), 10),
+                " | ",
+                pad(getEthString(exReward), 10)
+            )
+        );
     }
 
     function test_DailyRewardDistribution() public {
@@ -327,23 +346,25 @@ contract StakingComparisonTest is Test {
 
         console.log("\nFinal Results:");
         console.log("Whitelist User 1:");
-        console.log("  Principal: %.2f tokens", principal1 / 1e18);
-        console.log("  Total Rewards: %.2f tokens", (stakingToken.balanceOf(userWl) - wlBefore) / 1e18);
-        console.log("  Reward Percentage: %.2f%%", ((stakingToken.balanceOf(userWl) - wlBefore) * 100) / principal1);
-        
+        console.log("  Principal: %d tokens", principal1 / 1e18);
+        console.log("  Total Rewards: %d tokens", (stakingToken.balanceOf(userWl) - wlBefore) / 1e18);
+         
         console.log("\nWhitelist User 2:");
-        console.log("  Principal: %.2f tokens", principal2 / 1e18);
-        console.log("  Total Rewards: %.2f tokens", (stakingToken.balanceOf(userWl2) - wl2Before) / 1e18);
-        console.log("  Reward Percentage: %.2f%%", ((stakingToken.balanceOf(userWl2) - wl2Before) * 100) / principal2);
-        
+        console.log("  Principal: %d tokens", principal2 / 1e18);
+        console.log("  Total Rewards: %d tokens", (stakingToken.balanceOf(userWl2) - wl2Before) / 1e18);
+         
         console.log("\nExternal User 1:");
-        console.log("  Principal: %.2f tokens", principal1 / 1e18);
-        console.log("  Total Rewards: %.2f tokens", (stakingToken.balanceOf(userEx) - exBefore) / 1e18);
-        console.log("  Reward Percentage: %.2f%%", ((stakingToken.balanceOf(userEx) - exBefore) * 100) / principal1);
-        
+        console.log("  Principal: %d tokens", principal1 / 1e18);
+        console.log("  Total Rewards: %d tokens", (stakingToken.balanceOf(userEx) - exBefore) / 1e18);
+         
         console.log("\nExternal User 2:");
-        console.log("  Principal: %.2f tokens", principal2 / 1e18);
-        console.log("  Total Rewards: %.2f tokens", (stakingToken.balanceOf(userEx2) - ex2Before) / 1e18);
-        console.log("  Reward Percentage: %.2f%%", ((stakingToken.balanceOf(userEx2) - ex2Before) * 100) / principal2);
+        console.log("  Principal: %d tokens", principal2 / 1e18);
+        console.log("  Total Rewards: %d tokens", (stakingToken.balanceOf(userEx2) - ex2Before) / 1e18);
+     }
+
+       function getEthString(uint256 weiAmount) internal pure returns (string memory) {
+        uint256 ethWhole = weiAmount / 1e18;
+        uint256 ethDecimals = (weiAmount % 1e18);
+        return string.concat(vm.toString(ethWhole), ".", vm.toString(ethDecimals), " DIA");
     }
 }
