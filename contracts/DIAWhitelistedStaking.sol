@@ -68,7 +68,7 @@ contract DIAWhitelistedStaking is
         address beneficiaryAddress,
         uint256 amount,
         uint32 principalWalletShareBps
-    ) public nonReentrant{
+    ) public nonReentrant {
         if (!stakingWhitelist[beneficiaryAddress]) {
             revert NotWhitelisted();
         }
@@ -86,10 +86,10 @@ contract DIAWhitelistedStaking is
      * @param amount The amount of tokens to stake.
      */
     function stake(uint256 amount) external nonReentrant {
-          if (!stakingWhitelist[msg.sender]) {
+        if (!stakingWhitelist[msg.sender]) {
             revert NotWhitelisted();
         }
-          _internalStakeForAddress(msg.sender,msg.sender,amount, 10_000);
+        _internalStakeForAddress(msg.sender, msg.sender, amount, 10_000);
     }
 
     /**
@@ -98,7 +98,7 @@ contract DIAWhitelistedStaking is
      */
     function unstake(
         uint256 stakingStoreIndex
-    ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
+    ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         if (currentStore.unstakingRequestTime == 0) {
             revert UnstakingNotRequested();
@@ -155,9 +155,15 @@ contract DIAWhitelistedStaking is
      * @dev Only possible for the principal unstaker or the global owner
      * @param stakingStoreIndex Index of the staking store.
      */
-    function unstakePrincipal(uint256 stakingStoreIndex) external nonReentrant {
+    function unstakePrincipal(
+        uint256 stakingStoreIndex,
+        uint256 amount
+    ) external checkDailyWithdrawalLimit(amount) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
+        if (currentStore.unstakingRequestTime == 0) {
+            revert UnstakingNotRequested();
+        }
         if (
             currentStore.unstakingRequestTime + unstakingDuration >
             block.timestamp
@@ -168,7 +174,14 @@ contract DIAWhitelistedStaking is
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
+
+        if (amount > currentStore.principal) {
+            revert AmountExceedsStaked();
+        }
+
         updateReward(stakingStoreIndex);
+        uint256 principalToSend = amount;
+        currentStore.principal = currentStore.principal - amount;
 
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
@@ -179,8 +192,6 @@ contract DIAWhitelistedStaking is
         uint256 principalWalletReward = (rewardToSend *
             _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
-        uint256 principalToSend = currentStore.principal;
-        currentStore.principal = 0;
 
         if (principalWalletReward > 0) {
             // Send tokens to delegator
@@ -269,7 +280,7 @@ contract DIAWhitelistedStaking is
         }
         uint256 passedDays = passedSeconds / (24 * 60 * 60);
 
-				// assumption: reward rate is measured in bps
+        // assumption: reward rate is measured in bps
         return (rewardRatePerDay * passedDays * currentStore.principal) / 10000;
     }
 
@@ -285,5 +296,16 @@ contract DIAWhitelistedStaking is
         assert(reward >= currentStore.reward);
 
         currentStore.reward = reward;
+    }
+
+    /**
+     * @notice Get the current principal wallet share basis points for a stake
+     * @param stakeId The ID of the stake to check
+     * @return The current principal wallet share in basis points
+     */
+    function getCurrentPrincipalWalletShareBps(
+        uint256 stakeId
+    ) public view returns (uint32) {
+        return _getCurrentPrincipalWalletShareBps(stakeId);
     }
 }
