@@ -531,11 +531,13 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
      */
     function getRewardForStakingStore(
         uint256 stakingStoreIndex
-    ) public view returns (uint256) {
+    ) public view returns (uint256, uint256) {
         ExternalStakingStore storage store = stakingStores[stakingStoreIndex];
         uint256 claimableTokens = (store.poolShares * totalPoolSize) /
             totalShareAmount;
-        return claimableTokens - store.principal;
+        uint256 fullReward = claimableTokens - store.principal;
+				uint256 principalWalletReward = (fullReward * store.principalWalletShareBps) / 10000;
+				return (principalWalletReward, fullReward - principalWalletReward);
     }
 
     /**
