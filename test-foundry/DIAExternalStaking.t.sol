@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.29;
+pragma solidity ^0.8.29;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
@@ -679,5 +679,118 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
         // Fast forward past grace period
         vm.warp(block.timestamp + 2);
         assertEq(staking.getCurrentPrincipalWalletShareBps(1), newShareBps, "Share should update after grace period");
+    }
+
+    function test_CheckRemainingPrincipal() public {
+        console.log("\n=== Starting Principal Check Test with 5 Users ===");
+        
+        // Setup 5 users with different stake amounts and principal shares
+        address[5] memory users = [user1, user2, user3, address(0x5), address(0x6)];
+        uint256[5] memory amounts = [
+            uint256(1000 * 10 ** 18),  // 1000 tokens
+            uint256(2000 * 10 ** 18),  // 2000 tokens
+            uint256(500 * 10 ** 18),   // 500 tokens
+            uint256(1500 * 10 ** 18),  // 1500 tokens
+            uint256(3000 * 10 ** 18)   // 3000 tokens
+        ];
+        uint32[5] memory principalShares = [uint32(0), uint32(2000), uint32(5000), uint32(8000), uint32(10000)]; // 0%, 20%, 50%, 80%, 100%
+
+        // Fund and stake for each user
+        for (uint i = 0; i < 5; i++) {
+            deal(address(token), users[i], amounts[i] * 2); // Fund with double the stake amount
+            
+            vm.startPrank(users[i]);
+            token.approve(address(staking), amounts[i]);
+            staking.stake(amounts[i], principalShares[i]);
+            staking.requestUnstake(i + 1);
+            vm.stopPrank();
+
+            console.log("\n--- User %d Staking Details ---", i + 1);
+            console.log("Address: %s", users[i]);
+            console.log("Staked Amount: %s", getEthString(amounts[i]));
+            console.log("Principal Share: %d%%", principalShares[i] / 100);
+        }
+
+        vm.warp(block.timestamp + UNSTAKING_DURATION + 1);
+
+        vm.startPrank(rewardsWallet);
+        staking.addRewardToPool(1000 * 10 ** 18);
+        vm.stopPrank();
+
+        console.log("\n=== First Round of Unstaking (30%) ===");
+        // Test partial unstaking for each user
+        for (uint i = 0; i < 5; i++) {
+            // Get initial principal
+            (, , , uint256 initialPrincipal, , , , ) = staking.stakingStores(i + 1);
+            assertEq(initialPrincipal, amounts[i], string.concat("Initial principal should match stake amount for user ", vm.toString(i + 1)));
+
+            // Partial unstake (30% of initial amount)
+            uint256 unstakeAmount = (amounts[i] * 30) / 100;
+            vm.startPrank(users[i]);
+            staking.unstake(i + 1, unstakeAmount);
+            vm.stopPrank();
+
+            console.log("\n--- User %d First Unstake Details ---", i + 1);
+            console.log("Initial Principal: %s", getEthString(initialPrincipal));
+            console.log("Unstake Amount (30%%): %s", getEthString(unstakeAmount));
+            console.log("Remaining Principal: %s", getEthString(initialPrincipal - unstakeAmount));
+
+            // Check remaining principal
+            (, , , uint256 remainingPrincipal, , , , ) = staking.stakingStores(i + 1);
+            console.log("Remaining Principal from contract: %s", getEthString(remainingPrincipal));
+
+            assertEq(
+                remainingPrincipal, 
+                amounts[i] - unstakeAmount, 
+                string.concat("Remaining principal should be correct for user ", vm.toString(i + 1))
+            );
+
+            // Verify the unstake amount was received
+            uint256 expectedBalance = unstakeAmount;
+            assertEq(
+                token.balanceOf(users[i]),
+                expectedBalance,
+                string.concat("User should receive correct unstake amount for user ", vm.toString(i + 1))
+            );
+        }
+
+        // Add more rewards and test another partial unstake
+        vm.startPrank(rewardsWallet);
+        staking.addRewardToPool(500 * 10 ** 18);
+        vm.stopPrank();
+
+        console.log("\n=== Second Round of Unstaking (20% of remaining) ===");
+        // Test another partial unstake for each user
+        for (uint i = 0; i < 5; i++) {
+            // Get current principal
+            (, , , uint256 currentPrincipal, , , , ) = staking.stakingStores(i + 1);
+            
+            // Partial unstake (20% of remaining amount)
+            uint256 unstakeAmount = (currentPrincipal * 20) / 100;
+            vm.startPrank(users[i]);
+            staking.unstake(i + 1, unstakeAmount);
+            vm.stopPrank();
+
+            console.log("\n--- User %d Second Unstake Details ---", i + 1);
+            console.log("Current Principal: %s", getEthString(currentPrincipal));
+            console.log("Unstake Amount (20%%): %s", getEthString(unstakeAmount));
+            console.log("Final Remaining Principal: %s", getEthString(currentPrincipal - unstakeAmount));
+
+            // Check final remaining principal
+            (, , , uint256 finalPrincipal, , , , ) = staking.stakingStores(i + 1);
+            assertEq(
+                finalPrincipal,
+                currentPrincipal - unstakeAmount,
+                string.concat("Final remaining principal should be correct for user ", vm.toString(i + 1))
+            );
+        }
+
+        console.log("\n=== Test Completed ===");
+    }
+
+        function getEthString(uint256 weiAmount) internal pure returns (string memory) {
+        uint256 ethWhole = weiAmount / 1e18;
+        uint256 ethDecimals = (weiAmount % 1e18);
+        return string.concat(vm.toString(ethWhole), ".", vm.toString(ethDecimals), " DIA");
     }
 }
