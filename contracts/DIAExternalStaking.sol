@@ -96,7 +96,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         ];
         if (
             msg.sender != currentStore.beneficiary &&
-            msg.sender != currentStore.principalPayoutWallet
+            msg.sender != currentStore.principalUnstaker
         ) {
             revert AccessDenied();
         }
@@ -496,13 +496,13 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
 
     /**
      * @notice Gets the current principal wallet share basis points for a stake
-     * @param stakeId ID of the stake
+     * @param stakingStoreIndex ID of the stake
      * @return Current principal wallet share in basis points
      */
     function _getCurrentPrincipalWalletShareBps(
-        uint256 stakeId
+        uint256 stakingStoreIndex
     ) internal view returns (uint32) {
-        PendingShareUpdate memory pending = pendingShareUpdates[stakeId];
+        PendingShareUpdate memory pending = pendingShareUpdates[stakingStoreIndex];
         if (
             pending.requestTime > 0 &&
             block.timestamp >= pending.requestTime + SHARE_UPDATE_GRACE_PERIOD
@@ -510,18 +510,18 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             return pending.newShareBps;
         }
 
-        return stakingStores[stakeId].principalWalletShareBps;
+        return stakingStores[stakingStoreIndex].principalWalletShareBps;
     }
 
     /**
      * @notice Gets the current principal wallet share basis points for a stake
-     * @param stakeId ID of the stake
+     * @param stakingStoreIndex of the stake
      * @return Current principal wallet share in basis points
      */
     function getCurrentPrincipalWalletShareBps(
-        uint256 stakeId
+        uint256 stakingStoreIndex
     ) public view returns (uint32) {
-        return _getCurrentPrincipalWalletShareBps(stakeId);
+        return _getCurrentPrincipalWalletShareBps(stakingStoreIndex);
     }
 
     /**
@@ -542,27 +542,27 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
 
     /**
      * @notice Requests an update to the principal wallet share
-     * @param stakeId ID of the stake
+     * @param stakingStoreIndex of the stake
      * @param newShareBps New share in basis points
      * @custom:revert NotBeneficiary if caller is not the beneficiary
      * @custom:revert InvalidPrincipalWalletShare if new share exceeds 100%
      */
     function requestPrincipalWalletShareUpdate(
-        uint256 stakeId,
+        uint256 stakingStoreIndex,
         uint32 newShareBps
     ) external {
-        if (msg.sender != stakingStores[stakeId].beneficiary) {
-            revert NotBeneficiary();
+        if (msg.sender != stakingStores[stakingStoreIndex].principalUnstaker) {
+            revert NotPrincipalUnstaker();
         }
         if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
 
-        pendingShareUpdates[stakeId] = PendingShareUpdate({
+        pendingShareUpdates[stakingStoreIndex] = PendingShareUpdate({
             newShareBps: newShareBps,
             requestTime: uint64(block.timestamp)
         });
 
         emit PrincipalWalletShareUpdateRequested(
-            stakeId,
+            stakingStoreIndex,
             newShareBps,
             block.timestamp
         );
