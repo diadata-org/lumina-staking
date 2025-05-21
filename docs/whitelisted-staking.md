@@ -1,6 +1,6 @@
 # DIAWhitelistedStaking Pool
 
-`DIAWhitelistedStaking.sol` is a permissioned staking pool designed for whitelisted participants that supports direct staking and delegation.
+[`DIAWhitelistedStaking.sol`](../contracts/DIAWhitelistedStaking.sol) is a permissioned staking pool designed for whitelisted participants that supports direct staking and delegation.
 
 The contract implements a linear rewards mechanism, meaning that staking rewards accrue at a constant rate over time. Each staker’s rewards are calculated based on the amount of tokens staked and the duration of their stake. Rewards are distributed proportionally and can be claimed or withdrawn according to the contract’s rules. The system also supports splitting rewards between the beneficiary and a principal payout wallet (delegator), allowing for flexible reward sharing arrangements.
 
@@ -147,7 +147,7 @@ Interactions:
 
 ### unstakePrincipal(uint256 stakingStoreIndex, uint256 amount)
 
-`unstakePrincipal` withdraws an amount from the staker's principal. Requires a withdrawal request submission via `requestUnstake(uint256 stakingStoreIndex)`.
+`unstakePrincipal` withdraws an amount from the staker's principal. Requires a withdrawal request submission via `requestUnstake(uint256 stakingStoreIndex)`. Rewards don't accrue during the unstaking window.
 
 Checks:
 
