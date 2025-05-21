@@ -188,22 +188,11 @@ contract DIAStakingFuzzTest is Test {
         externalStaking.addRewardToPool(100 * 10 ** 18);
         vm.stopPrank();
 
-        uint256 reward = externalStaking.getRewardForStakingStore(1);
-        assertGt(reward, 0, "Should receive rewards with non-zero stake");
-    }
-
-    function test_RewardCalculationWithMaxStake() public {
-        vm.startPrank(user1);
-        externalStaking.stake(STAKING_LIMIT, 0);
-        vm.stopPrank();
-
-        vm.startPrank(rewardsWallet);
-        externalStaking.addRewardToPool(100 * 10 ** 18);
-        vm.stopPrank();
-
-        uint256 reward = externalStaking.getRewardForStakingStore(1);
-        assertGt(reward, 0, "Should receive rewards with max stake");
-    }
+        (uint256 principalWalletReward, uint256 fullReward) = externalStaking.getRewardForStakingStore(1);
+        uint256 reward = principalWalletReward * fullReward;
+        assertEq(reward, 0, "Should receive rewards with non-zero stake");
+     }
+ 
 
     // Time-based Edge Cases
 

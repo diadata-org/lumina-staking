@@ -604,13 +604,13 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
        
     }
 
-      function test_requestPrincipalWalletShareUpdate_NotBeneficiary() public {
+      function test_requestPrincipalWalletShareUpdate_NotPrincipalUnstaker() public {
 
         vm.startPrank(user1);
         token.approve(address(staking), 1 * 10 ** 18);
         staking.stake(1 * 10 ** 18, 1);
         vm.startPrank(user2);
-        vm.expectRevert(NotBeneficiary.selector);
+        vm.expectRevert(NotPrincipalUnstaker.selector);
         staking.requestPrincipalWalletShareUpdate(1,100);
        
     }

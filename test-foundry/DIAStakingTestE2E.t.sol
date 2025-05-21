@@ -66,7 +66,7 @@ contract DIAStakingTestE2E is Test {
 
     // Reward rates (225 DIA/day for external, 275 DIA/day for whitelist)
     uint256 public rewardRatePerDayExternal = 225/60 * 1e18; 
-    uint256 public rewardRatePerDayWhitelist = uint256(275 ) / 60;
+    uint256 public rewardRatePerDayWhitelist =  uint256(275 ) / 60;
 
     // Setup function
     function setUp() public {
@@ -150,28 +150,35 @@ contract DIAStakingTestE2E is Test {
     
     // Fund all delegator wallets
     function _fundDelegators() internal {
-        // Fund whitelist delegators
-        deal(address(stakingToken), whitelistDelegator1, 500 * 10 ** 18);
-        deal(address(stakingToken), whitelistDelegator2, 500 * 10 ** 18);
-        
-        // Approve spending
-        vm.startPrank(whitelistDelegator1);
-        stakingToken.approve(address(externalStaking), 500 * 10 ** 18);
-        stakingToken.approve(address(whitelistStaking), 500 * 10 ** 18);
-        vm.stopPrank();
+        // Define balances for delegators
+        uint256[2] memory whitelistDelegatorBalances = [uint256(500 * 10 ** 18), uint256(500 * 10 ** 18)];
+        uint256[3] memory externalDelegatorBalances = [uint256(500 * 10 ** 18), uint256(500 * 10 ** 18), uint256(500 * 10 ** 18)];
+        address[2] memory whitelistDelegators = [whitelistDelegator1, whitelistDelegator2];
+        address[3] memory externalDelegators = [externalDelegator1, externalDelegator2, externalDelegator3];
 
-        vm.startPrank(whitelistDelegator2);
-        stakingToken.approve(address(externalStaking), 500 * 10 ** 18);
-        stakingToken.approve(address(whitelistStaking), 500 * 10 ** 18);
-        vm.stopPrank();
-        
-        // Fund external staking delegators
-        deal(address(stakingToken), externalDelegator1, 500 * 10 ** 18);
-        deal(address(stakingToken), externalDelegator2, 500 * 10 ** 18);
-        deal(address(stakingToken), externalDelegator3, 500 * 10 ** 18);
+        // Log and fund whitelist delegators
+        console.log("\nFunding whitelist delegators:");
+        for (uint256 i = 0; i < whitelistDelegators.length; i++) {
+            console.log("Delegator %s: %s tokens", whitelistDelegators[i], getEthString(whitelistDelegatorBalances[i]));
+            deal(address(stakingToken), whitelistDelegators[i], whitelistDelegatorBalances[i]);
+            
+            vm.startPrank(whitelistDelegators[i]);
+            stakingToken.approve(address(externalStaking), whitelistDelegatorBalances[i]);
+            stakingToken.approve(address(whitelistStaking), whitelistDelegatorBalances[i]);
+            vm.stopPrank();
+        }
+
+        // Log and fund external delegators
+        console.log("\nFunding external delegators:");
+        for (uint256 i = 0; i < externalDelegators.length; i++) {
+            console.log("Delegator %s: %s tokens", externalDelegators[i], getEthString(externalDelegatorBalances[i]));
+            deal(address(stakingToken), externalDelegators[i], externalDelegatorBalances[i]);
+        }
         
         // Fund external stakers
+        console.log("\nFunding external stakers:");
         for (uint256 i = 0; i < externalStakers.length; i++) {
+            console.log("Staker %s: %s tokens", externalStakers[i], getEthString(externalStakersBalance[i]));
             deal(address(stakingToken), externalStakers[i], externalStakersBalance[i]);
         }
     }
@@ -263,7 +270,7 @@ contract DIAStakingTestE2E is Test {
         
         // Delegator 2 stakes to external staker 2 (90% reward to staker, 10% to delegator)
         console.log("\x1b[32m Stake delegate 150 $DIA with 90% reward to delegate \x1b[0m");
-        _stakeToExternal(externalDelegator2, externalStakers[1], externalStakersBalance[1], 9000);
+        _stakeToExternal(externalDelegator2, externalStakers[1], externalStakersBalance[1], 1000);
         
         // Delegator 2 stakes to external staker 3 (60% reward to staker, 40% to delegator)
         console.log("\x1b[32m Stake delegate 200 $DIA with 60% reward to delegate \x1b[0m");
@@ -350,6 +357,12 @@ contract DIAStakingTestE2E is Test {
         for (uint256 i = 0; i < 2; i++) {
             _processWhitelistUnstake(i);
         }
+
+        _processWhitelistUnstake(8);
+                _processWhitelistUnstake(9);
+                                _processWhitelistUnstake(10);
+ 
+
         
         // Process sample of external unstakes with full principal
         console.log("\n\n\n\n");
@@ -465,6 +478,8 @@ function _processWhitelistPartialUnstake(uint256 stakerIndex) internal {
 
     
     function _processWhitelistUnstake(uint256 stakerIndex) internal {
+
+
         uint256[] memory indices = whitelistStaking.getStakingIndicesByBeneficiary(whitelistStakers[stakerIndex]);
         
         uint256 balanceBefore = stakingToken.balanceOf(whitelistStakers[stakerIndex]);
@@ -477,7 +492,10 @@ function _processWhitelistPartialUnstake(uint256 stakerIndex) internal {
         vm.startPrank(whitelistStakers[stakerIndex]);
         (, , , uint256 principal, , , , ,  ) = whitelistStaking.stakingStores(indices[0]);
         console.log("Principal amount: %s tokens", getEthString(principal));
-        
+                 console.log("\nStaking details Before unstake:---------------------");
+
+                printStakingStoreWhitelist(indices[0]);
+
         whitelistStaking.unstake(indices[0]);
         vm.stopPrank();
         
@@ -517,8 +535,9 @@ function _processWhitelistPartialUnstake(uint256 stakerIndex) internal {
         uint256[] memory indices = externalStaking.getStakingIndicesByBeneficiary(externalStakers[stakerIndex]);
         skip(1 days);
 
-        uint256 rewards = externalStaking.getRewardForStakingStore(indices[0]);
-        
+         
+        (uint256 principalWalletReward, uint256 fullReward) = externalStaking.getRewardForStakingStore(indices[0]);
+        uint256 rewards = principalWalletReward * fullReward;
         uint256 balanceBefore = stakingToken.balanceOf(externalStakers[stakerIndex]);
         console.log("\nProcessing unstake for external staker %s (Index: %s)", 
             externalStakers[stakerIndex],
@@ -533,12 +552,23 @@ function _processWhitelistPartialUnstake(uint256 stakerIndex) internal {
 
         console.log("Balance Staked: %s tokens", getEthString(externalStakersBalance[stakerIndex]));
 
+
+          (  principalWalletReward,  fullReward) = externalStaking.getRewardForStakingStore(indices[0]);
+        uint256 reward = principalWalletReward + fullReward;
+
+        console.log("Reward amount: %s tokens", getEthString(reward));
+        console.log("principalWalletReward amount: %s tokens", getEthString(principalWalletReward));
+        console.log("Beneficiary Reward amount: %s tokens", getEthString(fullReward));
+
+
+
         
-        externalStaking.unstake(indices[0], principal);
+        externalStaking.unstake(indices[0], principal+reward);
         vm.stopPrank();
         
         uint256 balanceAfter = stakingToken.balanceOf(externalStakers[stakerIndex]);
-        console.log("Balance after unstake: %s tokens", getEthString(balanceAfter));
+ 
+        console.log("Balance after unstake: %s tokens  of %s", getEthString(balanceAfter), externalStakers[stakerIndex]);
         console.log("Tokens received: %s", getEthString(balanceAfter - balanceBefore));
         
         console.log("\nStaking details after unstake:");
@@ -588,18 +618,24 @@ function _processWhitelistPartialUnstake(uint256 stakerIndex) internal {
             uint32 principalWalletShareBps
         ) = externalStaking.stakingStores(index);
 
-
- 
- console2.log("\x1b[36mStake ID: %s\x1b[0m", index);
-    console2.log("\x1b[36m  Beneficiary: %s\x1b[0m", beneficiary);
-    console2.log("\x1b[36m  Payout Wallet: %s\x1b[0m", principalPayoutWallet);
-    console2.log("\x1b[36m  Unstaker: %s\x1b[0m", principalUnstaker);
-    console2.log("\x1b[36m  Principal: %s\x1b[0m", principal);
-    console2.log("\x1b[36m  Pool Shares: %s\x1b[0m", poolShares);
-    console2.log("\x1b[36m  Stake Start: %s\x1b[0m", stakingStartTime);
-    console2.log("\x1b[36m  Unstake Request Time: %s\x1b[0m", unstakingRequestTime);
-    console2.log("\x1b[36m  Principal Share BPS: %s\x1b[0m", principalWalletShareBps);
-
+        console2.log("\x1b[36mStake ID: %s\x1b[0m", index);
+        console2.log("\x1b[36m  Beneficiary: %s (Balance: %s)\x1b[0m", 
+            beneficiary, 
+            getEthString(stakingToken.balanceOf(beneficiary))
+        );
+        console2.log("\x1b[36m  Payout Wallet: %s (Balance: %s)\x1b[0m", 
+            principalPayoutWallet, 
+            getEthString(stakingToken.balanceOf(principalPayoutWallet))
+        );
+        console2.log("\x1b[36m  Unstaker: %s (Balance: %s)\x1b[0m", 
+            principalUnstaker, 
+            getEthString(stakingToken.balanceOf(principalUnstaker))
+        );
+        console2.log("\x1b[36m  Principal: %s\x1b[0m", principal);
+        console2.log("\x1b[36m  Pool Shares: %s\x1b[0m", poolShares);
+        console2.log("\x1b[36m  Stake Start: %s\x1b[0m", stakingStartTime);
+        console2.log("\x1b[36m  Unstake Request Time: %s\x1b[0m", unstakingRequestTime);
+        console2.log("\x1b[36m  Principal Share BPS: %s\x1b[0m", principalWalletShareBps);
     }
     
     // Common staking details printer
@@ -616,16 +652,25 @@ function _processWhitelistPartialUnstake(uint256 stakerIndex) internal {
         uint32 principalWalletShareBps
     ) internal view {
         console2.log("\x1b[36mStake ID: %s\x1b[0m", index);
-        console2.log("\x1b[36m  Beneficiary: %s\x1b[0m", beneficiary);
-        console2.log("\x1b[36m  Payout Wallet: %s\x1b[0m", principalPayoutWallet);
-        console2.log("\x1b[36m  Unstaker: %s\x1b[0m", principalUnstaker);
+        console2.log("\x1b[36m  Beneficiary: %s (Balance: %s)\x1b[0m", 
+            beneficiary, 
+            getEthString(stakingToken.balanceOf(beneficiary))
+        );
+        console2.log("\x1b[36m  Payout Wallet: %s (Balance: %s)\x1b[0m", 
+            principalPayoutWallet, 
+            getEthString(stakingToken.balanceOf(principalPayoutWallet))
+        );
+        console2.log("\x1b[36m  Unstaker: %s (Balance: %s)\x1b[0m", 
+            principalUnstaker, 
+            getEthString(stakingToken.balanceOf(principalUnstaker))
+        );
         console2.log("\x1b[36m  Principal: %s\x1b[0m", getEthString(principal));
         console2.log("\x1b[36m  Reward: %s\x1b[0m", getEthString(reward));
         console2.log("\x1b[36m  Paid Out Reward: %s\x1b[0m", getEthString(paidOutReward));
         console2.log("\x1b[36m  Stake Start: %s\x1b[0m", stakingStartTime);
         console2.log("\x1b[36m  Unstake Request Time: %s\x1b[0m", unstakingRequestTime);
         console2.log("\x1b[36m  Principal Share BPS: %s\x1b[0m", principalWalletShareBps);
-     }
+    }
     
     // Print state of all staking contracts
     function printState() public view {

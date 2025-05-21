@@ -11,4 +11,6 @@ lib
 coverage
 lcov.info
 coverage-html
+broadcast
+.env
 
