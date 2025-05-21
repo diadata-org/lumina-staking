@@ -9,7 +9,7 @@ This repository contains the DIA Lumina staking smart contracts, along with thei
 1. [`DIAExternalStaking.sol`](./contracts/DIAExternalStaking.sol): a permissionless staking pool that allows anyone to stake DIA tokens and earn rewards, with support for delegation.
 2. [`DIAWhitelistedStaking.sol`](./contracts/DIAWhitelistedStaking.sol): a permissioned staking pool designed for whitelisted participants that supports direct staking and delegation.
 
-For a high-level introduction to Lumina, see [Lumina docs](https://docs.diadata.org/).
+For a high-level introduction to Lumina, see [Lumina docs](https://docs.diadata.org/). Detailed description of each pool type can be found in [`/docs`](./docs/).
 
 ## Structure
 
