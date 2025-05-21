@@ -61,7 +61,7 @@ npm install
 
 Make sure you have foundry installed. The instructions can be found in their [documentation](https://book.getfoundry.sh/getting-started/installation).
 
-## Usage
+## Build & Test
 
 Compile contracts:
 
