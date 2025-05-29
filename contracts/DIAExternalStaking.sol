@@ -429,8 +429,6 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             principalUnstakeAmount;
         tokensStaked -= principalUnstakeAmount;
         currentStore.poolShares -= poolSharesUnstakeAmount;
-        currentStore.unstakingRequestTime = 0;
-        currentStore.stakingStartTime = uint64(block.timestamp);
 
         totalDailyWithdrawals += amount;
         totalPoolSize -= amount;
@@ -478,6 +476,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         ) {
             revert UnstakingPeriodNotElapsed();
         }
+
+        currentStore.unstakingRequestTime = 0;
+        currentStore.stakingStartTime = uint64(block.timestamp);
 
         if (currentStore.requestedUnstakePrincipalRewardAmount > 0) {
             STAKING_TOKEN.safeTransfer(
