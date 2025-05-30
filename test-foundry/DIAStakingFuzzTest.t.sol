@@ -80,7 +80,7 @@ contract DIAStakingFuzzTest is Test {
         externalStaking.stake(amount, 0);
         vm.stopPrank();
 
-        (,,,uint256 principal,,,,) = externalStaking.stakingStores(1);
+        (,,,uint256 principal,,,,,,,) = externalStaking.stakingStores(1);
         assertEq(principal, amount, "Staked amount should match input");
     }
 
@@ -91,7 +91,7 @@ contract DIAStakingFuzzTest is Test {
         externalStaking.stake(MINIMUM_STAKE, shareBps);
         vm.stopPrank();
 
-        (,,,,,,,uint32 principalWalletShareBps) = externalStaking.stakingStores(1);
+        (,,,,,,,uint32 principalWalletShareBps,,,) = externalStaking.stakingStores(1);
         assertEq(principalWalletShareBps, shareBps, "Principal share BPS should match input");
     }
 
@@ -113,7 +113,7 @@ contract DIAStakingFuzzTest is Test {
         externalStaking.stake(STAKING_LIMIT, 0);
         vm.stopPrank();
 
-        (,,,uint256 principal,,,,) = externalStaking.stakingStores(1);
+        (,,,uint256 principal,,,,,,,) = externalStaking.stakingStores(1);
         assertEq(principal, STAKING_LIMIT, "Should be able to stake at limit");
     }
 
@@ -199,25 +199,25 @@ contract DIAStakingFuzzTest is Test {
     function test_UnstakeImmediatelyAfterRequest() public {
         vm.startPrank(user1);
         externalStaking.stake(MINIMUM_STAKE, 0);
-        externalStaking.requestUnstake(1);
+        externalStaking.requestUnstake(1,MINIMUM_STAKE);
         vm.expectRevert(UnstakingPeriodNotElapsed.selector);
-        externalStaking.unstake(1, MINIMUM_STAKE);
+        externalStaking.unstake(1);
         vm.stopPrank();
     }
 
     function test_UnstakeExactlyAtDuration() public {
         vm.startPrank(user1);
         externalStaking.stake(MINIMUM_STAKE, 0);
-        externalStaking.requestUnstake(1);
+        externalStaking.requestUnstake(1,MINIMUM_STAKE);
         vm.stopPrank();
 
         vm.warp(block.timestamp + UNSTAKING_DURATION);
 
         vm.startPrank(user1);
-        externalStaking.unstake(1, MINIMUM_STAKE);
+        externalStaking.unstake(1);
         vm.stopPrank();
 
-        (,,,uint256 principal,,,,) = externalStaking.stakingStores(1);
+        (,,,uint256 principal,,,,,,,) = externalStaking.stakingStores(1);
         assertEq(principal, 0, "Should be able to unstake exactly at duration");
     }
 
@@ -228,7 +228,7 @@ contract DIAStakingFuzzTest is Test {
         
         // First stake
         externalStaking.stake(MINIMUM_STAKE, 0);
-        externalStaking.requestUnstake(1);
+        externalStaking.requestUnstake(1,MINIMUM_STAKE);
         
         // Second stake while first is unstaking
         externalStaking.stake(MINIMUM_STAKE, 0);
@@ -236,19 +236,19 @@ contract DIAStakingFuzzTest is Test {
         vm.warp(block.timestamp + UNSTAKING_DURATION);
         
         // Complete first unstake
-        externalStaking.unstake(1, MINIMUM_STAKE);
+        externalStaking.unstake(1);
         
         // Request unstake for second stake
-        externalStaking.requestUnstake(2);
+        externalStaking.requestUnstake(2,MINIMUM_STAKE);
         
         vm.warp(block.timestamp + UNSTAKING_DURATION);
         
         // Complete second unstake
-        externalStaking.unstake(2, MINIMUM_STAKE);
+        externalStaking.unstake(2);
         vm.stopPrank();
 
-        (,,,uint256 principal1,,,,) = externalStaking.stakingStores(1);
-        (,,,uint256 principal2,,,,) = externalStaking.stakingStores(2);
+        (,,,uint256 principal1,,,,,,,) = externalStaking.stakingStores(1);
+        (,,,uint256 principal2,,,,,,,) = externalStaking.stakingStores(2);
         
         assertEq(principal1, 0, "First stake should be fully unstaked");
         assertEq(principal2, 0, "Second stake should be fully unstaked");

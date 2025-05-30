@@ -53,6 +53,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint64 stakingStartTime; // When staking began
         uint64 unstakingRequestTime; // When unstaking was requested
         uint32 principalWalletShareBps; // Share of rewards going to principal wallet
+        uint256 requestedUnstakePrincipalAmount;
+        uint256 requestedUnstakePrincipalRewardAmount;
+        uint256 requestedUnstakeRewardAmount;
     }
 
     /// @notice Total size of the staking pool
@@ -387,36 +390,14 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     /**
      * @notice Requests unstaking, starting the waiting period
      * @param stakingStoreIndex Index of the staking store
+     * @param amount Amount to unstake
      * @custom:revert AlreadyRequestedUnstake if unstaking was already requested
      * @custom:revert AccessDenied if caller is not beneficiary or payout wallet
      */
     function requestUnstake(
-        uint256 stakingStoreIndex
-    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
-        ExternalStakingStore storage currentStore = stakingStores[
-            stakingStoreIndex
-        ];
-        if (currentStore.unstakingRequestTime != 0) {
-            revert AlreadyRequestedUnstake();
-        }
-        currentStore.unstakingRequestTime = uint64(block.timestamp);
-        emit UnstakeRequested(msg.sender, stakingStoreIndex);
-    }
-
-    /**
-     * @notice Completes the unstaking process after the required duration
-     * @param stakingStoreIndex Index of the staking store
-     * @param amount Amount to unstake
-     * @custom:revert UnstakingNotRequested if unstaking was not requested
-     * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
-     * @custom:revert AmountExceedsStaked if amount exceeds staked amount
-     * @custom:revert DailyWithdrawalLimitExceeded if withdrawal would exceed daily limit
-     */
-    function unstake(
         uint256 stakingStoreIndex,
         uint256 amount
-    )
-        external
+    ) external
         nonReentrant
         onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
         checkDailyWithdrawalLimit(amount)
@@ -424,16 +405,10 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         ExternalStakingStore storage currentStore = stakingStores[
             stakingStoreIndex
         ];
-        if (currentStore.unstakingRequestTime == 0) {
-            revert UnstakingNotRequested();
+        if (currentStore.unstakingRequestTime != 0) {
+            revert AlreadyRequestedUnstake();
         }
-
-        if (
-            currentStore.unstakingRequestTime + unstakingDuration >
-            block.timestamp
-        ) {
-            revert UnstakingPeriodNotElapsed();
-        }
+        currentStore.unstakingRequestTime = uint64(block.timestamp);
 
         uint256 currentAmountOfPool = (currentStore.poolShares *
             totalPoolSize) / totalShareAmount;
@@ -454,8 +429,6 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             principalUnstakeAmount;
         tokensStaked -= principalUnstakeAmount;
         currentStore.poolShares -= poolSharesUnstakeAmount;
-        currentStore.unstakingRequestTime = 0;
-        currentStore.stakingStartTime = uint64(block.timestamp);
 
         totalDailyWithdrawals += amount;
         totalPoolSize -= amount;
@@ -466,23 +439,73 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
 
         if (principalWalletReward > 0) {
+            currentStore.requestedUnstakePrincipalRewardAmount = principalWalletReward;
+        }
+
+        currentStore.requestedUnstakePrincipalAmount = principalToSend;
+        currentStore.requestedUnstakeRewardAmount = beneficiaryReward;
+
+        emit UnstakeRequested(msg.sender, stakingStoreIndex);
+    }
+
+    /**
+     * @notice Completes the unstaking process after the required duration
+     * @param stakingStoreIndex Index of the staking store
+     * @custom:revert UnstakingNotRequested if unstaking was not requested
+     * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
+     * @custom:revert AmountExceedsStaked if amount exceeds staked amount
+     * @custom:revert DailyWithdrawalLimitExceeded if withdrawal would exceed daily limit
+     */
+    function unstake(
+        uint256 stakingStoreIndex
+    )
+        external
+        nonReentrant
+        onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
+    {
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
+        if (currentStore.unstakingRequestTime == 0) {
+            revert UnstakingNotRequested();
+        }
+
+        if (
+            currentStore.unstakingRequestTime + unstakingDuration >
+            block.timestamp
+        ) {
+            revert UnstakingPeriodNotElapsed();
+        }
+
+        currentStore.unstakingRequestTime = 0;
+        currentStore.stakingStartTime = uint64(block.timestamp);
+
+        if (currentStore.requestedUnstakePrincipalRewardAmount > 0) {
             STAKING_TOKEN.safeTransfer(
                 currentStore.principalPayoutWallet,
-                principalWalletReward
+                currentStore.requestedUnstakePrincipalRewardAmount
             );
         }
 
         STAKING_TOKEN.safeTransfer(
             currentStore.principalPayoutWallet,
-            principalToSend
+            currentStore.requestedUnstakePrincipalAmount
         );
-        STAKING_TOKEN.safeTransfer(currentStore.beneficiary, beneficiaryReward);
+        STAKING_TOKEN.safeTransfer(
+            currentStore.beneficiary,
+            currentStore.requestedUnstakeRewardAmount
+        );
+
+
+        currentStore.requestedUnstakePrincipalRewardAmount = 0;
+        currentStore.requestedUnstakePrincipalAmount = 0;
+        currentStore.requestedUnstakeRewardAmount = 0;
 
         emit Unstaked(
             stakingStoreIndex,
-            principalToSend,
-            principalWalletReward,
-            beneficiaryReward,
+            currentStore.requestedUnstakePrincipalRewardAmount,
+            currentStore.requestedUnstakePrincipalAmount,
+            currentStore.requestedUnstakeRewardAmount,
             currentStore.principalPayoutWallet,
             currentStore.beneficiary
         );
@@ -536,8 +559,8 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 claimableTokens = (store.poolShares * totalPoolSize) /
             totalShareAmount;
         uint256 fullReward = claimableTokens - store.principal;
-				uint256 principalWalletReward = (fullReward * store.principalWalletShareBps) / 10000;
-				return (principalWalletReward, fullReward - principalWalletReward);
+        uint256 principalWalletReward = (fullReward * store.principalWalletShareBps) / 10000;
+        return (principalWalletReward, fullReward - principalWalletReward);
     }
 
     /**
