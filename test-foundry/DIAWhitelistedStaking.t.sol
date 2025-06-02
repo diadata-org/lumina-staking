@@ -50,7 +50,6 @@ contract DIAWhitelistedStakingTest is Test {
             100
         );
 
-                stakingContract.setDailyWithdrawalThreshold(1);
 
 
         deal(address(stakingToken), user, INITIAL_USER_BALANCE);
@@ -782,7 +781,6 @@ contract DIAWhitelistedStakingTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(InvalidWithdrawalCap.selector, 10001)
         );
-        stakingContract.setWithdrawalCapBps(10001);
     }
 
 
@@ -797,7 +795,6 @@ contract DIAWhitelistedStakingTest is Test {
             )
         );
 
-        stakingContract.setDailyWithdrawalThreshold(newThreshold);
     }
 
         function testGetStakingIndicesByPrincipalUnstaker() public {
@@ -927,9 +924,7 @@ contract DIAWhitelistedStakingTest is Test {
     function test_UnstakePrincipal() public {
         // Setup initial stake
         vm.startPrank(owner);
-        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
         deal(address(stakingToken), user, STAKE_AMOUNT *2);
-        stakingContract.setWithdrawalCapBps(10000);
         stakingContract.addWhitelistedStaker(user);
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
@@ -976,8 +971,6 @@ contract DIAWhitelistedStakingTest is Test {
         vm.startPrank(owner);
         stakingContract.addWhitelistedStaker(user);
         deal(address(stakingToken), user, STAKE_AMOUNT *2);
-        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
-        stakingContract.setWithdrawalCapBps(10000);
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
         stakingContract.stake(STAKE_AMOUNT);
@@ -1005,8 +998,6 @@ contract DIAWhitelistedStakingTest is Test {
         vm.startPrank(owner);
         stakingContract.addWhitelistedStaker(user);
         deal(address(stakingToken), user, STAKE_AMOUNT *2);
-        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
-        stakingContract.setWithdrawalCapBps(10000);
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
         stakingContract.stake(STAKE_AMOUNT);
@@ -1025,8 +1016,6 @@ contract DIAWhitelistedStakingTest is Test {
        vm.startPrank(owner);
         stakingContract.addWhitelistedStaker(user);
         deal(address(stakingToken), user, STAKE_AMOUNT *2);
-        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
-        stakingContract.setWithdrawalCapBps(10000);
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
         stakingContract.stake(STAKE_AMOUNT);
@@ -1050,8 +1039,6 @@ contract DIAWhitelistedStakingTest is Test {
         vm.startPrank(owner);
         deal(address(stakingToken), user, STAKE_AMOUNT * 2);
         stakingContract.addWhitelistedStaker(user);
-        stakingContract.setDailyWithdrawalThreshold(1000000000000000000);
-        stakingContract.setWithdrawalCapBps(10000);
         vm.startPrank(user);
         stakingToken.approve(address(stakingContract), STAKE_AMOUNT *2);
         stakingContract.stake(STAKE_AMOUNT);

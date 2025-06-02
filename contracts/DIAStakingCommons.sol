@@ -48,12 +48,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
     /// @notice How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 
-    uint256 public totalDailyWithdrawals;
-
-    uint256 public lastWithdrawalResetDay;
-    uint256 public dailyWithdrawalThreshold = 100000 * 10 ** 18; // Set threshold as needed
-    uint256 public withdrawalCapBps = 1000; // 1000 bps = 10%
-
     /// @notice Mapping of staking index to corresponding staking store.
     mapping(uint256 => DIAStakingCommons.StakingStore) public stakingStores;
 
@@ -87,30 +81,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         emit UnstakingDurationUpdated(unstakingDuration, newDuration);
 
         unstakingDuration = newDuration;
-    }
-
-    function setWithdrawalCapBps(uint256 newBps) external onlyOwner {
-        if (newBps > 10000) {
-            revert InvalidWithdrawalCap(newBps);
-        }
-
-        uint256 oldCap = withdrawalCapBps;
-        withdrawalCapBps = newBps;
-
-        emit WithdrawalCapUpdated(oldCap, newBps); // Emit event with old and new values
-    }
-
-    function setDailyWithdrawalThreshold(
-        uint256 newThreshold
-    ) external onlyOwner {
-        if (newThreshold == 0) {
-            revert InvalidDailyWithdrawalThreshold(newThreshold);
-        }
-
-        uint256 oldThreshold = dailyWithdrawalThreshold;
-        dailyWithdrawalThreshold = newThreshold;
-
-        emit DailyWithdrawalThresholdUpdated(oldThreshold, newThreshold);
     }
 
     function getStakingIndicesByBeneficiary(
@@ -244,8 +214,11 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
 
         stakingIndicesByPrincipalUnstaker[newUnstaker].push(stakingStoreIndex);
 
-        emit PrincipalUnstakerUpdated(oldWallet, newUnstaker, stakingStoreIndex);
-
+        emit PrincipalUnstakerUpdated(
+            oldWallet,
+            newUnstaker,
+            stakingStoreIndex
+        );
     }
 
     /**
@@ -290,9 +263,10 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
 
         // update last state of pending
 
-        stakingStores[stakeId].principalWalletShareBps = _getCurrentPrincipalWalletShareBps(
+        stakingStores[stakeId]
+            .principalWalletShareBps = _getCurrentPrincipalWalletShareBps(
             stakeId
-        ); 
+        );
 
         if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
 
