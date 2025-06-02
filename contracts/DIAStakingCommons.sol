@@ -193,6 +193,7 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         address newWallet,
         uint256 stakingStoreIndex
     ) external {
+        if (newWallet == address(0)) revert ZeroAddress();
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         address oldWallet = currentStore.principalPayoutWallet;
