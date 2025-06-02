@@ -43,8 +43,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
 
     uint256 public tokensStaked;
 
-    uint256 public stakingLimit;
-
     /// @notice How long (in seconds) for unstaking to take place
     uint256 public unstakingDuration;
 

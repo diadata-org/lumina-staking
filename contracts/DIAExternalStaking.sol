@@ -87,6 +87,14 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     /// @notice Mapping of staking indices to their corresponding staking stores
     mapping(uint256 => ExternalStakingStore) public stakingStores;
 
+    /// @notice Error thrown when staking limit is zero
+    error InvalidStakingLimit();
+
+    /// @notice Emitted when staking limit is updated
+    /// @param oldLimit The previous staking limit
+    /// @param newLimit The new staking limit
+    event StakingLimitUpdated(uint256 oldLimit, uint256 newLimit);
+
     /**
      * @notice Modifier to check if caller is beneficiary or payout wallet
      * @param stakingStoreIndex Index of the staking store
@@ -132,6 +140,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
      * @param _stakingTokenAddress Address of the ERC20 token used for staking
      * @param _stakingLimit Maximum amount of tokens that can be staked
      * @custom:revert ZeroAddress if staking token address is zero
+     * @custom:revert InvalidStakingLimit if staking limit is zero
      */
     constructor(
         uint256 _unstakingDuration,
@@ -139,6 +148,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 _stakingLimit
     ) Ownable(msg.sender) {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
+        if (_stakingLimit == 0) revert InvalidStakingLimit();
 
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
@@ -610,5 +620,17 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             newShareBps,
             block.timestamp
         );
+    }
+
+    /**
+     * @notice Updates the staking limit
+     * @param newLimit New maximum amount of tokens that can be staked
+     * @custom:revert InvalidStakingLimit if new limit is zero
+     */
+    function setStakingLimit(uint256 newLimit) external onlyOwner {
+        if (newLimit == 0) revert InvalidStakingLimit();
+        uint256 oldLimit = stakingLimit;
+        stakingLimit = newLimit;
+        emit StakingLimitUpdated(oldLimit, newLimit);
     }
 }
