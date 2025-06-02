@@ -559,7 +559,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 claimableTokens = (store.poolShares * totalPoolSize) /
             totalShareAmount;
         uint256 fullReward = claimableTokens - store.principal;
-        uint256 principalWalletReward = (fullReward * store.principalWalletShareBps) / 10000;
+        uint256 principalWalletReward = (fullReward * _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
         return (principalWalletReward, fullReward - principalWalletReward);
     }
 
