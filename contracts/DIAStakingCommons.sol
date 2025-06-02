@@ -35,7 +35,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         address principalPayoutWallet;
         address principalUnstaker;
         uint256 principal;
-        uint256 reward;
         uint256 paidOutReward;
         uint64 stakingStartTime;
         uint64 unstakingRequestTime;

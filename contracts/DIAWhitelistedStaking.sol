@@ -138,10 +138,7 @@ contract DIAWhitelistedStaking is
             revert UnstakingPeriodNotElapsed();
         }
 
-        // Ensure the reward amount is up to date
-        updateReward(stakingStoreIndex);
-
-        uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
+        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
 
         uint256 principalWalletReward = (rewardToSend *
@@ -163,7 +160,6 @@ contract DIAWhitelistedStaking is
             beneficiaryReward
         );
         currentStore.unstakingRequestTime = 0;
-        currentStore.reward = 0;
         currentStore.stakingStartTime = uint64(block.timestamp);
 
         emit Unstaked(
@@ -210,13 +206,12 @@ contract DIAWhitelistedStaking is
             revert AmountExceedsStaked();
         }
 
-        updateReward(stakingStoreIndex);
         uint256 principalToSend = amount;
         currentStore.principal = currentStore.principal - amount;
-        
+
         tokensStaked -= amount;
 
-        uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
+        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
 
         currentStore.unstakingRequestTime = 0;
@@ -314,20 +309,6 @@ contract DIAWhitelistedStaking is
 
         // assumption: reward rate is measured in bps
         return (rewardRatePerDay * passedDays * currentStore.principal) / 10000;
-    }
-
-    /**
-     * @notice Updates the reward amount for a given staking store
-     * @dev Ensures the reward does not decrease
-     * @param stakingStoreIndex The index of the staking store
-     * @custom:assert The newly calculated reward must be greater than or equal to the current reward
-     */
-    function updateReward(uint256 stakingStoreIndex) internal {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        uint256 reward = getRewardForStakingStore(stakingStoreIndex);
-        assert(reward >= currentStore.reward);
-
-        currentStore.reward = reward;
     }
 
     /**
