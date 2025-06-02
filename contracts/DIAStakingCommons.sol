@@ -104,7 +104,7 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
     function setDailyWithdrawalThreshold(
         uint256 newThreshold
     ) external onlyOwner {
-        if (newThreshold <= 0) {
+        if (newThreshold == 0) {
             revert InvalidDailyWithdrawalThreshold(newThreshold);
         }
 
