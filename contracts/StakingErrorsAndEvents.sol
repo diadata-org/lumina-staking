@@ -69,4 +69,3 @@ event PrincipalUnstakerUpdated(
     address newUnstaker,
     uint256 stakingStoreIndex
 );
-

@@ -139,6 +139,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 _stakingLimit
     ) Ownable(msg.sender) {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
+
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
         stakingLimit = _stakingLimit;
@@ -387,12 +388,12 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
-        
+
         address oldWallet = currentStore.principalUnstaker;
 
         currentStore.principalUnstaker = newUnstaker;
 
-         _removeStakingIndexFromAddressMapping(
+        _removeStakingIndexFromAddressMapping(
             oldWallet,
             stakingStoreIndex,
             stakingIndicesByPrincipalUnstaker
@@ -400,8 +401,11 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
 
         stakingIndicesByPrincipalUnstaker[newUnstaker].push(stakingStoreIndex);
 
-        emit PrincipalUnstakerUpdated(oldWallet, newUnstaker, stakingStoreIndex);
-
+        emit PrincipalUnstakerUpdated(
+            oldWallet,
+            newUnstaker,
+            stakingStoreIndex
+        );
     }
 
     /**
@@ -414,7 +418,8 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     function requestUnstake(
         uint256 stakingStoreIndex,
         uint256 amount
-    ) external
+    )
+        external
         nonReentrant
         onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
         checkDailyWithdrawalLimit(amount)
@@ -456,7 +461,8 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 beneficiaryReward = rewardToSend - principalWalletReward;
 
         if (principalWalletReward > 0) {
-            currentStore.requestedUnstakePrincipalRewardAmount = principalWalletReward;
+            currentStore
+                .requestedUnstakePrincipalRewardAmount = principalWalletReward;
         }
 
         currentStore.requestedUnstakePrincipalAmount = principalToSend;
@@ -475,11 +481,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
      */
     function unstake(
         uint256 stakingStoreIndex
-    )
-        external
-        nonReentrant
-        onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
-    {
+    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         ExternalStakingStore storage currentStore = stakingStores[
             stakingStoreIndex
         ];
@@ -513,7 +515,6 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             currentStore.requestedUnstakeRewardAmount
         );
 
-
         currentStore.requestedUnstakePrincipalRewardAmount = 0;
         currentStore.requestedUnstakePrincipalAmount = 0;
         currentStore.requestedUnstakeRewardAmount = 0;
@@ -528,7 +529,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         );
     }
 
-    function addRewardToPool(uint256 amount) onlyOwner public {
+    function addRewardToPool(uint256 amount) public onlyOwner {
         STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
         totalPoolSize += amount;
         emit RewardAdded(amount, msg.sender);
@@ -542,7 +543,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     function _getCurrentPrincipalWalletShareBps(
         uint256 stakingStoreIndex
     ) internal view returns (uint32) {
-        PendingShareUpdate memory pending = pendingShareUpdates[stakingStoreIndex];
+        PendingShareUpdate memory pending = pendingShareUpdates[
+            stakingStoreIndex
+        ];
         if (
             pending.requestTime > 0 &&
             block.timestamp >= pending.requestTime + SHARE_UPDATE_GRACE_PERIOD
@@ -576,7 +579,8 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 claimableTokens = (store.poolShares * totalPoolSize) /
             totalShareAmount;
         uint256 fullReward = claimableTokens - store.principal;
-        uint256 principalWalletReward = (fullReward * _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
+        uint256 principalWalletReward = (fullReward *
+            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
         return (principalWalletReward, fullReward - principalWalletReward);
     }
 

@@ -71,6 +71,16 @@ contract DIAWhitelistedStaking is
             _rewardRatePerDay
         )
     {
+        if (_stakingTokenAddress == address(0)) revert ZeroAddress();
+
+        if (_unstakingDuration < 1 days) {
+            revert UnstakingDurationTooShort();
+        }
+
+        if (_unstakingDuration > 20 days) {
+            revert UnstakingDurationTooLong();
+        }
+
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
     }
@@ -138,7 +148,8 @@ contract DIAWhitelistedStaking is
             revert UnstakingPeriodNotElapsed();
         }
 
-        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) - currentStore.paidOutReward;
+        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) -
+            currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
 
         uint256 principalWalletReward = (rewardToSend *
@@ -211,7 +222,8 @@ contract DIAWhitelistedStaking is
 
         tokensStaked -= amount;
 
-        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) - currentStore.paidOutReward;
+        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) -
+            currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
 
         currentStore.unstakingRequestTime = 0;

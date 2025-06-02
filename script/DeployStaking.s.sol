@@ -2,7 +2,7 @@
 pragma solidity ^0.8.29;
 
 import "forge-std/Script.sol";
-import "../contracts/DIAExternalStaking.sol";
+import "../contracts/DIAExternalStakingMock.sol";
 import "../contracts/DIAWhitelistedStaking.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
@@ -19,7 +19,7 @@ contract DeployStaking is Script {
         vm.startBroadcast();
 
         // Deploy DIAExternalStaking
-        DIAExternalStaking externalStaking = new DIAExternalStaking(
+        DIAExternalStakingMock externalStaking = new DIAExternalStakingMock(
             unstakingDuration,
             stakingToken,
             stakingLimit
@@ -35,11 +35,11 @@ contract DeployStaking is Script {
 
         // Configure contracts
         externalStaking.setWithdrawalCapBps(10000); // 100%
-        whitelistedStaking.setWithdrawalCapBps(10000); // 100%
 
         // Set daily withdrawal thresholds
         externalStaking.setDailyWithdrawalThreshold(100000 * 10 ** 18);
-        whitelistedStaking.setDailyWithdrawalThreshold(100000 * 10 ** 18);
+
+        
 
         vm.stopBroadcast();
 
