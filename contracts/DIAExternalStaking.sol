@@ -388,7 +388,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             revert NotPrincipalUnstaker();
         }
         
-        address oldWallet = currentStore.principalPayoutWallet;
+        address oldWallet = currentStore.principalUnstaker;
 
         currentStore.principalUnstaker = newUnstaker;
 
@@ -399,6 +399,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         );
 
         stakingIndicesByPrincipalUnstaker[newUnstaker].push(stakingStoreIndex);
+
+        emit PrincipalUnstakerUpdated(oldUnstaker, newUnstaker, stakingStoreIndex);
+
     }
 
     /**

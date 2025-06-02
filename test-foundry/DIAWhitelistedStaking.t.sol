@@ -124,7 +124,7 @@ contract DIAWhitelistedStakingTest is Test {
         );
 
         // Verify staking store
-        (address beneficiary, , , uint256 principal, , , , , ) = stakingContract
+        (address beneficiary, , , uint256 principal, , , , ) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -139,7 +139,7 @@ contract DIAWhitelistedStakingTest is Test {
         testStake();
         vm.startPrank(user);
         stakingContract.requestUnstake(1);
-        (, , , , , , , uint256 unstakingRequestTime, ) = stakingContract
+        (, , , , , ,  uint256 unstakingRequestTime, ) = stakingContract
             .stakingStores(1);
 
         console.log("Unstaking request time", unstakingRequestTime);
@@ -159,9 +159,7 @@ contract DIAWhitelistedStakingTest is Test {
         stakingContract.unstake(1);
         vm.stopPrank();
 
-        // Verify reward is zero after unstake (no rewards accumulated in this test)
-        (, , , , uint256 reward, , , , ) = stakingContract.stakingStores(1);
-        assertEq(reward, 0, "Reward should be zero after unstaking");
+       
     }
 
     
@@ -319,7 +317,7 @@ contract DIAWhitelistedStakingTest is Test {
                 ,
                 ,
                 ,
-                ,
+                
                 
 
             ) = stakingContract.stakingStores(i + 1);
@@ -364,7 +362,6 @@ contract DIAWhitelistedStakingTest is Test {
             address principalPayoutWallet,
             address principalUnstaker,
             uint256 principal,
-            uint256 reward,
             uint256 paidOutReward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
@@ -399,7 +396,6 @@ contract DIAWhitelistedStakingTest is Test {
             address principalPayoutWallet,
             address principalUnstaker,
             uint256 principal,
-            uint256 reward,
             uint256 paidOutReward,
             uint256 stakingStartTime,
             uint256 unstakingRequestTime,
@@ -428,7 +424,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         address newPayoutWallet = address(0x9876);
 
-         (, address principalPayoutWallet, , , , , , , ) = stakingContract
+         (, address principalPayoutWallet, , , , , ,  ) = stakingContract
             .stakingStores(1);
 
             console.log("principalPayoutWallet",principalPayoutWallet);
@@ -440,7 +436,7 @@ contract DIAWhitelistedStakingTest is Test {
         stakingContract.updatePrincipalPayoutWallet(newPayoutWallet, 1);
         vm.stopPrank();
 
-        (,   principalPayoutWallet, , , , , , , ) = stakingContract
+        (,   principalPayoutWallet, , , , , ,  ) = stakingContract
             .stakingStores(1);
 
         assertEq(
@@ -455,7 +451,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         address newPayoutWallet = address(0x9876);
 
-         (, address principalPayoutWallet, , , , , , , ) = stakingContract
+         (, address principalPayoutWallet, , , , , ,  ) = stakingContract
             .stakingStores(1);
 
             console.log("principalPayoutWallet",principalPayoutWallet);
@@ -673,7 +669,7 @@ contract DIAWhitelistedStakingTest is Test {
      
 
 
-              (address beneficiary, , , uint256 principal, , , , , ) = stakingContract
+              (address beneficiary, , , uint256 principal, , , ,  ) = stakingContract
             .stakingStores(1);
         assertEq(beneficiary, user, "Beneficiary should match the user");
         assertEq(
@@ -704,7 +700,7 @@ contract DIAWhitelistedStakingTest is Test {
         console.log("96% Rewards", userRewards);
 
  
-          (  beneficiary, , ,   principal, , , , ,) = stakingContract
+          (  beneficiary, , ,   principal, , , , ) = stakingContract
             .stakingStores(1);
 
         // Unstake tokens

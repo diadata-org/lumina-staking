@@ -231,7 +231,7 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
-        address oldWallet = currentStore.principalPayoutWallet;
+        address oldWallet = currentStore.principalUnstaker;
 
         currentStore.principalUnstaker = newUnstaker;
 
@@ -242,6 +242,8 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         );
 
         stakingIndicesByPrincipalUnstaker[newUnstaker].push(stakingStoreIndex);
+
+        emit PrincipalUnstakerUpdated(oldWallet, newUnstaker, stakingStoreIndex);
 
     }
 

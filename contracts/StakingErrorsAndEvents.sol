@@ -21,6 +21,8 @@ error NotPrincipalUnstaker();
 error NotWhitelisted();
 error NotBeneficiary();
 
+
+
 uint256 constant minimumStake = 1; //   minimum stake of 1 tokens
 uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
 
@@ -63,3 +65,10 @@ event PrincipalWalletShareUpdateRequested(
     uint32 newBps,
     uint256 timestamp
 );
+
+event PrincipalUnstakerUpdated(
+    address oldUnstaker,
+    address newUnstaker,
+    uint256 stakingStoreIndex
+);
+
