@@ -90,7 +90,7 @@ contract DIAWhitelistedStaking is
         if (!stakingWhitelist[msg.sender]) {
             revert NotWhitelisted();
         }
-        
+
         if (!stakingWhitelist[beneficiaryAddress]) {
             revert NotWhitelisted();
         }
@@ -213,6 +213,8 @@ contract DIAWhitelistedStaking is
         updateReward(stakingStoreIndex);
         uint256 principalToSend = amount;
         currentStore.principal = currentStore.principal - amount;
+        
+        tokensStaked -= amount;
 
         uint256 rewardToSend = currentStore.reward - currentStore.paidOutReward;
         currentStore.paidOutReward += rewardToSend;
