@@ -52,10 +52,10 @@ contract DIAWhitelistedStaking is
 
     /**
      * @dev Initializes the contract with staking parameters.
-     * @param newUnstakingDuration Duration in seconds required before unstaking.
-     * @param stakingTokenAddress Address of the ERC20 token used for staking.
-     * @param rewardsWallet Address of the wallet that holds rewards.This wallet should appove tokens for this contract
-     * @param rewardRatePerDay Rate at which rewards accumulate daily.
+     * @param _unstakingDuration Duration in seconds required before unstaking.
+     * @param _stakingTokenAddress Address of the ERC20 token used for staking.
+     * @param _rewardsWallet Address of the wallet that holds rewards.This wallet should appove tokens for this contract
+     * @param _rewardRatePerDay Rate at which rewards accumulate daily.
      */
 
     constructor(
@@ -305,7 +305,7 @@ contract DIAWhitelistedStaking is
         } else {
             passedSeconds = block.timestamp - currentStore.stakingStartTime;
         }
-        uint256 passedDays = passedSeconds / (24 * 60 * 60);
+        uint256 passedDays = passedSeconds / (SECONDS_IN_A_DAY);
 
         // assumption: reward rate is measured in bps
         return (rewardRatePerDay * passedDays * currentStore.principal) / 10000;

@@ -400,7 +400,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
 
         stakingIndicesByPrincipalUnstaker[newUnstaker].push(stakingStoreIndex);
 
-        emit PrincipalUnstakerUpdated(oldUnstaker, newUnstaker, stakingStoreIndex);
+        emit PrincipalUnstakerUpdated(oldWallet, newUnstaker, stakingStoreIndex);
 
     }
 
