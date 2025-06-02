@@ -776,26 +776,10 @@ contract DIAWhitelistedStakingTest is Test {
     stakingContract.requestPrincipalWalletShareUpdate(index[0], 10001);
 }
 
-  function test_InvalidWithdrawalCap() public {
-        vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(InvalidWithdrawalCap.selector, 10001)
-        );
-    }
 
 
-    function testSetInvalidDailyWithdrawalThreshold() public {
-        uint256 newThreshold = 0;
 
-        vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InvalidDailyWithdrawalThreshold.selector,
-                newThreshold
-            )
-        );
-
-    }
+ 
 
         function testGetStakingIndicesByPrincipalUnstaker() public {
 

@@ -52,6 +52,10 @@ contract DIAStakingFuzzTest is Test {
         token.transfer(user1, initialBalance);
         token.transfer(user2, initialBalance);
         token.transfer(rewardsWallet, initialBalance);
+        token.transfer(owner, initialBalance);
+        token.approve(address(externalStaking), type(uint256).max);
+
+
 
         // Approve tokens
         vm.startPrank(user1);
@@ -180,11 +184,14 @@ contract DIAStakingFuzzTest is Test {
     // Reward Calculation Edge Cases
 
     function test_RewardCalculationWithZeroStake() public {
+
+        
+
         vm.startPrank(user1);
         externalStaking.stake(MINIMUM_STAKE, 0);
         vm.stopPrank();
 
-        vm.startPrank(rewardsWallet);
+        vm.startPrank(owner);
         externalStaking.addRewardToPool(100 * 10 ** 18);
         vm.stopPrank();
 
