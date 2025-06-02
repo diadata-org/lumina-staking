@@ -19,6 +19,9 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
 
     uint256 public stakingIndex;
 
+    /// @notice Maximum number of stakes allowed per beneficiary
+    uint256 public maxStakesPerBeneficiary = 100;
+
     struct PendingShareUpdate {
         uint32 newShareBps;
         uint64 requestTime;
@@ -125,6 +128,13 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
 
         if (amount < minimumStake) {
             revert AmountBelowMinimumStake(amount);
+        }
+
+        if (
+            stakingIndicesByBeneficiary[beneficiaryAddress].length >=
+            maxStakesPerBeneficiary
+        ) {
+            revert MaxStakesPerBeneficiaryReached();
         }
 
         // Transfer tokens

@@ -20,6 +20,8 @@ error NotOwner();
 error NotPrincipalUnstaker();
 error NotWhitelisted();
 error NotBeneficiary();
+error InvalidStakesPerBeneficiaryLimit();
+error InvalidStakingLimit();
 
 uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
@@ -69,3 +71,9 @@ event PrincipalUnstakerUpdated(
     address newUnstaker,
     uint256 stakingStoreIndex
 );
+
+error MaxStakesPerBeneficiaryReached();
+
+event StakingLimitUpdated(uint256 oldLimit, uint256 newLimit);
+
+event MaxStakesPerBeneficiaryUpdated(uint256 oldLimit, uint256 newLimit);

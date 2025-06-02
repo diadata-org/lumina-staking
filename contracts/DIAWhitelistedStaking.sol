@@ -47,6 +47,14 @@ contract DIAWhitelistedStaking is
     /// @param newCap The new cap value in basis points
     event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
 
+    /// @notice Emitted when unstaking only principal amount
+    /// @param stakingStoreIndex Index of the staking store
+    /// @param amount Amount of principal unstaked
+    event UnstakedOnlyPrincipalAmount(
+        uint256 stakingStoreIndex,
+        uint256 amount
+    );
+
     /// @notice Errors
     error AlreadyWhitelisted();
 
@@ -189,6 +197,59 @@ contract DIAWhitelistedStaking is
      * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
      * @custom:revert AmountExceedsStaked if amount exceeds staked principal
      */
+    function unstakeOnlyPrincipalAmount(
+        uint256 stakingStoreIndex,
+        uint256 amount
+    ) external nonReentrant {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        if (currentStore.unstakingRequestTime == 0) {
+            revert UnstakingNotRequested();
+        }
+        if (
+            currentStore.unstakingRequestTime + unstakingDuration >
+            block.timestamp
+        ) {
+            revert UnstakingPeriodNotElapsed();
+        }
+
+        if (currentStore.principalUnstaker != msg.sender) {
+            revert NotPrincipalUnstaker();
+        }
+
+        if (amount > currentStore.principal) {
+            revert AmountExceedsStaked();
+        }
+
+        uint256 principalToSend = amount;
+        currentStore.principal = currentStore.principal - amount;
+
+        tokensStaked -= amount;
+        currentStore.unstakingRequestTime = 0;
+        // no need to reset as rewards are skip from this tx
+        // currentStore.stakingStartTime = uint64(block.timestamp);
+
+        if (principalToSend > 0) {
+            // Pay out principal
+            STAKING_TOKEN.safeTransfer(
+                currentStore.principalPayoutWallet,
+                principalToSend
+            );
+        }
+
+        emit UnstakedOnlyPrincipalAmount(stakingStoreIndex, principalToSend);
+    }
+
+    /**
+     * @notice Unstakes the principal amount immediately
+     * @dev Only possible for the principal unstaker
+     * @param stakingStoreIndex Index of the staking store
+     * @param amount Amount of principal to unstake
+     * @custom:revert NotPrincipalUnstaker if caller is not the principal unstaker
+     * @custom:revert UnstakingNotRequested if unstaking was not requested
+     * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
+     * @custom:revert AmountExceedsStaked if amount exceeds staked principal
+     */
     function unstakePrincipal(
         uint256 stakingStoreIndex,
         uint256 amount
@@ -238,18 +299,22 @@ contract DIAWhitelistedStaking is
             );
         }
 
-        // Pay out principal
-        STAKING_TOKEN.safeTransfer(
-            currentStore.principalPayoutWallet,
-            principalToSend
-        );
+        if (principalToSend > 0) {
+            // Pay out principal
+            STAKING_TOKEN.safeTransfer(
+                currentStore.principalPayoutWallet,
+                principalToSend
+            );
+        }
 
-        // Send remaining reward tokens to beneficiary
-        STAKING_TOKEN.safeTransferFrom(
-            rewardsWallet,
-            currentStore.beneficiary,
-            beneficiaryReward
-        );
+        if (beneficiaryReward > 0) {
+            // Send remaining reward tokens to beneficiary
+            STAKING_TOKEN.safeTransferFrom(
+                rewardsWallet,
+                currentStore.beneficiary,
+                beneficiaryReward
+            );
+        }
 
         emit Unstaked(
             stakingStoreIndex,
@@ -328,5 +393,28 @@ contract DIAWhitelistedStaking is
         uint256 stakeId
     ) public view returns (uint32) {
         return _getCurrentPrincipalWalletShareBps(stakeId);
+    }
+
+    /**
+     * @notice Updates the maximum number of stakes allowed per beneficiary
+     * @param newLimit New maximum number of stakes per beneficiary
+     * @custom:revert InvalidStakesPerBeneficiaryLimit if new limit is zero
+     */
+    function setMaxStakesPerBeneficiary(uint256 newLimit) external onlyOwner {
+        if (newLimit == 0) revert InvalidStakesPerBeneficiaryLimit();
+        uint256 oldLimit = maxStakesPerBeneficiary;
+        maxStakesPerBeneficiary = newLimit;
+        emit MaxStakesPerBeneficiaryUpdated(oldLimit, newLimit);
+    }
+
+    /**
+     * @notice Gets the number of stakes for a beneficiary
+     * @param beneficiary Address of the beneficiary
+     * @return Number of stakes for the beneficiary
+     */
+    function getStakesCountForBeneficiary(
+        address beneficiary
+    ) external view returns (uint256) {
+        return stakingIndicesByBeneficiary[beneficiary].length;
     }
 }

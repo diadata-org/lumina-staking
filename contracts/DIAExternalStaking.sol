@@ -24,6 +24,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     /// @notice Mapping of payout wallet addresses to their staking indices
     mapping(address => uint256[]) internal stakingIndicesByPayoutWallet;
 
+    /// @notice Maximum number of stakes allowed per beneficiary
+    uint256 public maxStakesPerBeneficiary = 100;
+
     /// @notice Current staking index counter
     uint256 public stakingIndex;
 
@@ -87,18 +90,10 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     /// @notice Mapping of staking indices to their corresponding staking stores
     mapping(uint256 => ExternalStakingStore) public stakingStores;
 
-    /// @notice Error thrown when staking limit is zero
-    error InvalidStakingLimit();
-
-    /// @notice Emitted when staking limit is updated
-    /// @param oldLimit The previous staking limit
-    /// @param newLimit The new staking limit
-    event StakingLimitUpdated(uint256 oldLimit, uint256 newLimit);
-
     /**
      * @notice Modifier to check if caller is beneficiary or payout wallet
      * @param stakingStoreIndex Index of the staking store
-     * @custom:revert AccessDenied if caller is neither beneficiary nor principal unstaker 
+     * @custom:revert AccessDenied if caller is neither beneficiary nor principal unstaker
      */
     modifier onlyBeneficiaryOrPrincipalUnstaker(uint256 stakingStoreIndex) {
         ExternalStakingStore storage currentStore = stakingStores[
@@ -207,6 +202,13 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
 
         if (amount < minimumStake) {
             revert AmountBelowMinimumStake(amount);
+        }
+
+        if (
+            stakingIndicesByBeneficiary[beneficiaryAddress].length >=
+            maxStakesPerBeneficiary
+        ) {
+            revert MaxStakesPerBeneficiaryReached();
         }
 
         STAKING_TOKEN.safeTransferFrom(staker, address(this), amount);
@@ -491,7 +493,11 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
      */
     function unstake(
         uint256 stakingStoreIndex
-    ) external nonReentrant onlyBeneficiaryOrPrincipalUnstaker(stakingStoreIndex) {
+    )
+        external
+        nonReentrant
+        onlyBeneficiaryOrPrincipalUnstaker(stakingStoreIndex)
+    {
         ExternalStakingStore storage currentStore = stakingStores[
             stakingStoreIndex
         ];
@@ -632,5 +638,28 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 oldLimit = stakingLimit;
         stakingLimit = newLimit;
         emit StakingLimitUpdated(oldLimit, newLimit);
+    }
+
+    /**
+     * @notice Updates the maximum number of stakes allowed per beneficiary
+     * @param newLimit New maximum number of stakes per beneficiary
+     * @custom:revert InvalidStakesPerBeneficiaryLimit if new limit is zero
+     */
+    function setMaxStakesPerBeneficiary(uint256 newLimit) external onlyOwner {
+        if (newLimit == 0) revert InvalidStakesPerBeneficiaryLimit();
+        uint256 oldLimit = maxStakesPerBeneficiary;
+        maxStakesPerBeneficiary = newLimit;
+        emit MaxStakesPerBeneficiaryUpdated(oldLimit, newLimit);
+    }
+
+    /**
+     * @notice Gets the number of stakes for a beneficiary
+     * @param beneficiary Address of the beneficiary
+     * @return Number of stakes for the beneficiary
+     */
+    function getStakesCountForBeneficiary(
+        address beneficiary
+    ) external view returns (uint256) {
+        return stakingIndicesByBeneficiary[beneficiary].length;
     }
 }
