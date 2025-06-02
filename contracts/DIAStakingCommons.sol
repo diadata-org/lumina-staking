@@ -212,7 +212,7 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         stakingIndicesByPayoutWallet[newWallet].push(stakingStoreIndex);
 
         emit PrincipalPayoutWalletUpdated(
-            currentStore.principalPayoutWallet,
+            oldWallet,
             newWallet,
             stakingStoreIndex
         );
