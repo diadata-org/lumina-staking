@@ -276,6 +276,12 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
             revert NotBeneficiary();
         }
 
+        // update last state of pending
+
+        stakingStores[stakeId].principalWalletShareBps = _getCurrentPrincipalWalletShareBps(
+            stakeId
+        ); 
+
         if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
 
         pendingShareUpdates[stakeId] = PendingShareUpdate({
