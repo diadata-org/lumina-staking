@@ -59,20 +59,20 @@ contract DIAWhitelistedStaking is
      */
 
     constructor(
-        uint256 newUnstakingDuration,
-        address stakingTokenAddress,
-        address rewardsWallet,
-        uint256 rewardRatePerDay
+        uint256 _unstakingDuration,
+        address _stakingTokenAddress,
+        address _rewardsWallet,
+        uint256 _rewardRatePerDay
     )
         Ownable(msg.sender)
         DIARewardsDistribution(
-            stakingTokenAddress,
-            rewardsWallet,
-            rewardRatePerDay
+            _stakingTokenAddress,
+            _rewardsWallet,
+            _rewardRatePerDay
         )
     {
-        unstakingDuration = newUnstakingDuration;
-        STAKING_TOKEN = IERC20(stakingTokenAddress);
+        unstakingDuration = _unstakingDuration;
+        STAKING_TOKEN = IERC20(_stakingTokenAddress);
     }
 
     /**
