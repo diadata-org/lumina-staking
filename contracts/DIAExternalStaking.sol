@@ -142,7 +142,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
         stakingLimit = _stakingLimit;
-        lastWithdrawalResetDay = block.timestamp;
+        lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
     }
 
     /**
