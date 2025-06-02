@@ -98,9 +98,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     /**
      * @notice Modifier to check if caller is beneficiary or payout wallet
      * @param stakingStoreIndex Index of the staking store
-     * @custom:revert AccessDenied if caller is neither beneficiary nor payout wallet
+     * @custom:revert AccessDenied if caller is neither beneficiary nor principal unstaker 
      */
-    modifier onlyBeneficiaryOrPayoutWallet(uint256 stakingStoreIndex) {
+    modifier onlyBeneficiaryOrPrincipalUnstaker(uint256 stakingStoreIndex) {
         ExternalStakingStore storage currentStore = stakingStores[
             stakingStoreIndex
         ];
@@ -431,7 +431,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     )
         external
         nonReentrant
-        onlyBeneficiaryOrPayoutWallet(stakingStoreIndex)
+        onlyBeneficiaryOrPrincipalUnstaker(stakingStoreIndex)
         checkDailyWithdrawalLimit(amount)
     {
         ExternalStakingStore storage currentStore = stakingStores[
@@ -491,7 +491,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
      */
     function unstake(
         uint256 stakingStoreIndex
-    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
+    ) external nonReentrant onlyBeneficiaryOrPrincipalUnstaker(stakingStoreIndex) {
         ExternalStakingStore storage currentStore = stakingStores[
             stakingStoreIndex
         ];
