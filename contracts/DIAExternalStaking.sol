@@ -384,7 +384,18 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
         }
+        
+        address oldWallet = currentStore.principalPayoutWallet;
+
         currentStore.principalUnstaker = newUnstaker;
+
+         _removeStakingIndexFromAddressMapping(
+            oldWallet,
+            stakingStoreIndex,
+            stakingIndicesByPrincipalUnstaker
+        );
+
+        stakingIndicesByPrincipalUnstaker[newUnstaker].push(stakingStoreIndex);
     }
 
     /**

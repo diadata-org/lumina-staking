@@ -695,6 +695,31 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
         assertEq(staking.getCurrentPrincipalWalletShareBps(1), newShareBps, "Share should update after grace period");
     }
 
+    function test_updatePrincipalUnstaker_UpdatesMapping() public {
+         uint256 amount = 1000 * 10 ** 18;
+        uint32 principalShareBps = 1000;
+
+         vm.startPrank(user1);
+        token.approve(address(staking), amount);
+        staking.stake(amount, principalShareBps);
+        vm.stopPrank();
+
+         uint256[] memory initialIndices = staking.getStakingIndicesByPrincipalUnstaker(user1);
+        assertEq(initialIndices.length, 1, "Initial unstaker should have one stake");
+        assertEq(initialIndices[0], 1, "Initial stake index should be 1");
+
+         vm.prank(user1);
+        staking.updatePrincipalUnstaker(user2, 1);
+
+         uint256[] memory oldUnstakerIndices = staking.getStakingIndicesByPrincipalUnstaker(user1);
+        assertEq(oldUnstakerIndices.length, 0, "Old unstaker should have no stakes");
+
+        // Check new unstaker mapping
+        uint256[] memory newUnstakerIndices = staking.getStakingIndicesByPrincipalUnstaker(user2);
+        assertEq(newUnstakerIndices.length, 1, "New unstaker should have one stake");
+        assertEq(newUnstakerIndices[0], 1, "New unstaker should have stake index 1");
+    }
+
     // function test_CheckRemainingPrincipal() public {
     //     console.log("\n=== Starting Principal Check Test with 5 Users ===");
     //     console.log("Note: Due to integer division in Solidity, small rounding differences (1-2 wei) are expected in principal calculations.");
