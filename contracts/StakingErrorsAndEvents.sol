@@ -21,9 +21,7 @@ error NotPrincipalUnstaker();
 error NotWhitelisted();
 error NotBeneficiary();
 
-
-
-uint256 constant minimumStake = 1; //   minimum stake of 1 tokens
+uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
 
 event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
