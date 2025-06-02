@@ -65,11 +65,7 @@ contract DIAWhitelistedStaking is
         uint256 _rewardRatePerDay
     )
         Ownable(msg.sender)
-        DIARewardsDistribution(
-            _stakingTokenAddress,
-            _rewardsWallet,
-            _rewardRatePerDay
-        )
+        DIARewardsDistribution(_rewardsWallet, _rewardRatePerDay)
     {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
 

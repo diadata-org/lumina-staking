@@ -11,9 +11,6 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
  * @dev Provides base functionality for reward rate and wallet management
  */
 abstract contract DIARewardsDistribution is Ownable {
-    /// @notice The ERC20 token used for rewards
-    IERC20 public immutable REWARDS_TOKEN;
-
     // Reward rate per day, with 10 decimals
     uint256 public rewardRatePerDay;
 
@@ -23,6 +20,9 @@ abstract contract DIARewardsDistribution is Ownable {
 
     /// @notice Error thrown when an invalid address is provided
     error InvalidAddress();
+
+    /// @notice Error thrown when reward rate exceeds maximum allowed
+    error InvalidRewardRate(uint256 newRate);
 
     /// @notice Emitted when reward rate is updated
     /// @param oldRewardRate The previous reward rate
@@ -36,18 +36,18 @@ abstract contract DIARewardsDistribution is Ownable {
 
     /**
      * @notice Initializes the contract with reward parameters
-     * @param rewardsTokenAddress Address of the ERC20 token used for rewards
-     * @param newRewardsWallet Address of the wallet that holds rewards
-     * @param newRewardRate Initial reward rate per day
+     * @param _rewardsWallet Address of the wallet that holds rewards
+     * @param _rewardRatePerDay Initial reward rate per day
      */
-    constructor(
-        address rewardsTokenAddress,
-        address newRewardsWallet,
-        uint256 newRewardRate
-    ) {
-        REWARDS_TOKEN = IERC20(rewardsTokenAddress);
-        rewardRatePerDay = newRewardRate;
-        rewardsWallet = newRewardsWallet;
+    constructor(address _rewardsWallet, uint256 _rewardRatePerDay) {
+        if (_rewardRatePerDay > 2000) {
+            revert InvalidRewardRate(_rewardRatePerDay);
+        }
+        if (_rewardsWallet == address(0)) {
+            revert InvalidAddress();
+        }
+        rewardRatePerDay = _rewardRatePerDay;
+        rewardsWallet = _rewardsWallet;
     }
 
     /**
@@ -57,6 +57,9 @@ abstract contract DIARewardsDistribution is Ownable {
      * @custom:event Emits RewardRateUpdated with old and new values
      */
     function updateRewardRatePerDay(uint256 newRewardRate) external onlyOwner {
+        if (newRewardRate > 2000) {
+            revert InvalidRewardRate(newRewardRate);
+        }
         emit RewardRateUpdated(rewardRatePerDay, newRewardRate);
         rewardRatePerDay = newRewardRate;
     }
