@@ -207,6 +207,10 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             poolSharesGiven = (amount * totalShareAmount) / totalPoolSize;
         }
 
+        if (poolSharesGiven == 0) {
+            revert ZeroPoolSharesMinted();
+        }
+
         totalPoolSize += amount;
         totalShareAmount += poolSharesGiven;
 
@@ -521,7 +525,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         );
     }
 
-    function addRewardToPool(uint256 amount) public {
+    function addRewardToPool(uint256 amount) onlyOwner public {
         STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
         totalPoolSize += amount;
         emit RewardAdded(amount, msg.sender);
