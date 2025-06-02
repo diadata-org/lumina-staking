@@ -87,6 +87,10 @@ contract DIAWhitelistedStaking is
         uint256 amount,
         uint32 principalWalletShareBps
     ) public nonReentrant {
+        if (!stakingWhitelist[msg.sender]) {
+            revert NotWhitelisted();
+        }
+        
         if (!stakingWhitelist[beneficiaryAddress]) {
             revert NotWhitelisted();
         }

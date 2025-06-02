@@ -86,6 +86,8 @@ contract DIAWhitelistedStakingTest is Test {
 
     function stakeForTokens(uint256 amount, address user) internal {
         vm.startPrank(owner);
+        stakingContract.addWhitelistedStaker(owner);
+
 
         stakingContract.addWhitelistedStaker(address(user));
         stakingToken.approve(address(stakingContract), amount);
@@ -621,9 +623,14 @@ contract DIAWhitelistedStakingTest is Test {
 
         vm.startPrank(owner);
 
+        stakingContract.addWhitelistedStaker(owner);
+
         stakingContract.addWhitelistedStaker(address(user));
         
         address delegator = address(0x345);
+        stakingContract.addWhitelistedStaker(delegator);
+
+        
         deal(address(stakingToken), delegator, INITIAL_USER_BALANCE);
 
         uint256 start = block.timestamp;
@@ -640,6 +647,7 @@ contract DIAWhitelistedStakingTest is Test {
 
         vm.startPrank(delegator);
         stakingToken.approve(address(stakingContract), STAKE_AMOUNT);
+        
         stakingContract.stakeForAddress(user, STAKE_AMOUNT, 400); // Principal wallet gets 4% reward
 
         vm.stopPrank();
