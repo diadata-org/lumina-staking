@@ -129,8 +129,7 @@ contract DIAWhitelistedStaking is
     ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) -
-            currentStore.paidOutReward;
+        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex);
         currentStore.paidOutReward += rewardToSend;
 
         uint256 principalWalletReward = (rewardToSend *
