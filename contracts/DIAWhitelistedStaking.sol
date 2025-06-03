@@ -34,19 +34,6 @@ contract DIAWhitelistedStaking is
     /// @param removedStaker The address that was removed from the whitelist
     event StakerAddressRemoved(address removedStaker);
 
-    /// @notice Emitted when daily withdrawal threshold is updated
-    /// @param oldThreshold The previous threshold value
-    /// @param newThreshold The new threshold value
-    event DailyWithdrawalThresholdUpdated(
-        uint256 oldThreshold,
-        uint256 newThreshold
-    );
-
-    /// @notice Emitted when withdrawal cap is updated
-    /// @param oldCap The previous cap value in basis points
-    /// @param newCap The new cap value in basis points
-    event WithdrawalCapUpdated(uint256 oldCap, uint256 newCap);
-
     /// @notice Emitted when unstaking only principal amount
     /// @param stakingStoreIndex Index of the staking store
     /// @param amount Amount of principal unstaked
