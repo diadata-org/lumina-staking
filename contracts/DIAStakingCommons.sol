@@ -42,6 +42,8 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         uint64 stakingStartTime;
         uint64 unstakingRequestTime;
         uint32 principalWalletShareBps;
+        uint256 rewardAccumulator;
+        uint64 lastClaimTime;
     }
 
     uint256 public tokensStaked;
@@ -149,6 +151,7 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         newStore.stakingStartTime = uint64(block.timestamp);
         newStore.principalWalletShareBps = principalWalletShareBps;
         newStore.principalUnstaker = sender;
+        newStore.lastClaimTime = uint64(block.timestamp);
 
         // Track stake info
         tokensStaked += amount;
@@ -227,23 +230,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
             newUnstaker,
             stakingStoreIndex
         );
-    }
-
-    /**
-     * @notice Requests unstaking, starting the waiting period.
-     * @dev Can only be called by the beneficiary.
-     * @param stakingStoreIndex Index of the staking store.
-     */
-    function requestUnstake(
-        uint256 stakingStoreIndex
-    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        if (currentStore.unstakingRequestTime != 0) {
-            revert AlreadyRequestedUnstake();
-        }
-
-        currentStore.unstakingRequestTime = uint64(block.timestamp);
-        emit UnstakeRequested(msg.sender, stakingStoreIndex);
     }
 
     function _getCurrentPrincipalWalletShareBps(

@@ -22,6 +22,7 @@ error NotWhitelisted();
 error NotBeneficiary();
 error InvalidStakesPerBeneficiaryLimit();
 error InvalidStakingLimit();
+error UnclaimedRewards();
 
 uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
@@ -39,6 +40,12 @@ event UnstakeRequested(
 );
 
 event Unstaked(
+    uint256 indexed stakingStoreIndex,
+    uint256 principalAmount,
+    address principalPayoutWallet
+);
+
+event Claimed(
     uint256 indexed stakingStoreIndex,
     uint256 principalAmount,
     uint256 principalWalletReward,

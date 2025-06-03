@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-
+import "./StakingErrorsAndEvents.sol";
 /**
  * @title DIARewardsDistribution
  * @notice Abstract contract for managing token rewards distribution
@@ -17,6 +17,12 @@ abstract contract DIARewardsDistribution is Ownable {
     /// @notice Address of the wallet that holds rewards
     /// @dev This wallet must approve tokens for the staking contract
     address public rewardsWallet;
+
+    /// @notice Accumulated rewards for all staking stores
+    uint256 public rewardAccumulator;
+
+    /// @notice Last time the _rewardAccumulator was updated
+    uint256 public rewardLastUpdateTime;
 
     /// @notice Error thrown when an invalid address is provided
     error InvalidAddress();
@@ -48,6 +54,7 @@ abstract contract DIARewardsDistribution is Ownable {
         }
         rewardRatePerDay = _rewardRatePerDay;
         rewardsWallet = _rewardsWallet;
+        rewardLastUpdateTime = block.timestamp;
     }
 
     /**
@@ -60,8 +67,17 @@ abstract contract DIARewardsDistribution is Ownable {
         if (newRewardRate > 2000) {
             revert InvalidRewardRate(newRewardRate);
         }
-        emit RewardRateUpdated(rewardRatePerDay, newRewardRate);
+
+        uint256 oldRewardRate = rewardRatePerDay;
         rewardRatePerDay = newRewardRate;
+
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
+        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed) / 10000;
+        rewardAccumulator += rewardsAccrued;
+
+        rewardLastUpdateTime = block.timestamp;
+
+        emit RewardRateUpdated(oldRewardRate, newRewardRate);
     }
 
     /**

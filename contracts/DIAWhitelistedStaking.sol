@@ -124,20 +124,10 @@ contract DIAWhitelistedStaking is
      * @custom:revert UnstakingNotRequested if unstaking was not requested
      * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
      */
-    function unstake(
+    function claim(
         uint256 stakingStoreIndex
     ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        if (currentStore.unstakingRequestTime == 0) {
-            revert UnstakingNotRequested();
-        }
-
-        if (
-            currentStore.unstakingRequestTime + unstakingDuration >
-            block.timestamp
-        ) {
-            revert UnstakingPeriodNotElapsed();
-        }
 
         uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) -
             currentStore.paidOutReward;
@@ -161,10 +151,11 @@ contract DIAWhitelistedStaking is
             currentStore.beneficiary,
             beneficiaryReward
         );
-        currentStore.unstakingRequestTime = 0;
-        currentStore.stakingStartTime = uint64(block.timestamp);
 
-        emit Unstaked(
+        currentStore.unstakingRequestTime = 0;
+        currentStore.lastClaimTime = uint64(block.timestamp);
+
+        emit Claimed(
             stakingStoreIndex,
             0,
             principalWalletReward,
@@ -175,56 +166,27 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Unstakes the principal amount immediately
-     * @dev Only possible for the principal unstaker
-     * @param stakingStoreIndex Index of the staking store
-     * @param amount Amount of principal to unstake
-     * @custom:revert NotPrincipalUnstaker if caller is not the principal unstaker
-     * @custom:revert UnstakingNotRequested if unstaking was not requested
-     * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
-     * @custom:revert AmountExceedsStaked if amount exceeds staked principal
+     * @notice Requests unstaking, starting the waiting period.
+     * @dev Can only be called by the beneficiary.
+     * @param stakingStoreIndex Index of the staking store.
      */
-    function unstakeOnlyPrincipalAmount(
-        uint256 stakingStoreIndex,
-        uint256 amount
-    ) external nonReentrant {
+    function requestUnstake(
+        uint256 stakingStoreIndex
+    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        if (currentStore.unstakingRequestTime == 0) {
-            revert UnstakingNotRequested();
-        }
-        if (
-            currentStore.unstakingRequestTime + unstakingDuration >
-            block.timestamp
-        ) {
-            revert UnstakingPeriodNotElapsed();
+        if (currentStore.unstakingRequestTime != 0) {
+            revert AlreadyRequestedUnstake();
         }
 
-        if (currentStore.principalUnstaker != msg.sender) {
-            revert NotPrincipalUnstaker();
+        uint256 totalRewards = _getTotalRewards(stakingStoreIndex);
+
+        if(currentStore.paidOutReward != totalRewards) {
+            revert UnclaimedRewards();
         }
 
-        if (amount > currentStore.principal) {
-            revert AmountExceedsStaked();
-        }
-
-        uint256 principalToSend = amount;
-        currentStore.principal = currentStore.principal - amount;
-
-        tokensStaked -= amount;
-        // currentStore.unstakingRequestTime = 0;
-        // no need to reset as rewards are skip from this tx
-        // currentStore.stakingStartTime = uint64(block.timestamp);
-
-        if (principalToSend > 0) {
-            // Pay out principal
-            STAKING_TOKEN.safeTransfer(
-                currentStore.principalPayoutWallet,
-                principalToSend
-            );
-        }
-
-        emit UnstakedOnlyPrincipalAmount(stakingStoreIndex, principalToSend);
+        currentStore.unstakingRequestTime = uint64(block.timestamp);
+        emit UnstakeRequested(msg.sender, stakingStoreIndex);
     }
 
     /**
@@ -237,9 +199,8 @@ contract DIAWhitelistedStaking is
      * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
      * @custom:revert AmountExceedsStaked if amount exceeds staked principal
      */
-    function unstakePrincipal(
-        uint256 stakingStoreIndex,
-        uint256 amount
+    function unstake(
+        uint256 stakingStoreIndex
     ) external nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
@@ -261,55 +222,23 @@ contract DIAWhitelistedStaking is
             revert AmountExceedsStaked();
         }
 
-        uint256 principalToSend = amount;
-        currentStore.principal = currentStore.principal - amount;
-
-        tokensStaked -= amount;
-
-        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex) -
-            currentStore.paidOutReward;
-        currentStore.paidOutReward += rewardToSend;
+        uint256 principalToSend = currentStore.principal;
+        tokensStaked -= principalToSend;
 
         currentStore.unstakingRequestTime = 0;
-        currentStore.stakingStartTime = uint64(block.timestamp);
-
-        uint256 principalWalletReward = (rewardToSend *
-            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
-        uint256 beneficiaryReward = rewardToSend - principalWalletReward;
-
-        if (principalWalletReward > 0) {
-            // Send tokens to delegator
-            STAKING_TOKEN.safeTransferFrom(
-                rewardsWallet,
-                currentStore.principalPayoutWallet,
-                principalWalletReward
-            );
-        }
 
         if (principalToSend > 0) {
             // Pay out principal
             STAKING_TOKEN.safeTransfer(
                 currentStore.principalPayoutWallet,
-                principalToSend
-            );
-        }
-
-        if (beneficiaryReward > 0) {
-            // Send remaining reward tokens to beneficiary
-            STAKING_TOKEN.safeTransferFrom(
-                rewardsWallet,
-                currentStore.beneficiary,
-                beneficiaryReward
+               principalToSend
             );
         }
 
         emit Unstaked(
             stakingStoreIndex,
             principalToSend,
-            principalWalletReward,
-            beneficiaryReward,
-            currentStore.principalPayoutWallet,
-            currentStore.beneficiary
+            currentStore.principalPayoutWallet
         );
     }
 
@@ -356,19 +285,16 @@ contract DIAWhitelistedStaking is
     ) public view override returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        // Calculate number of full days that passed for staking store
-        uint256 passedSeconds;
-        if (currentStore.unstakingRequestTime > 0) {
-            passedSeconds =
-                currentStore.unstakingRequestTime -
-                currentStore.stakingStartTime;
-        } else {
-            passedSeconds = block.timestamp - currentStore.stakingStartTime;
-        }
-        uint256 passedDays = passedSeconds / (SECONDS_IN_A_DAY);
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
+        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed) / 10000;
+        rewardAccumulator += rewardsAccrued;
+        rewardLastUpdateTime = block.timestamp;
 
-        // assumption: reward rate is measured in bps
-        return (rewardRatePerDay * passedDays * currentStore.principal) / 10000;
+        stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+        currentStore.rewardAccumulator = rewardAccumulator;
+        uint256 stakerReward = (stakerDelta * currentStore.principal) / 10000;
+
+        return stakerReward;
     }
 
     /**
@@ -403,5 +329,20 @@ contract DIAWhitelistedStaking is
         address beneficiary
     ) external view returns (uint256) {
         return stakingIndicesByBeneficiary[beneficiary].length;
+    }
+
+    function _getTotalRewards(
+        uint256 stakingStoreIndex
+    ) internal view returns (uint256) {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        if(currentStore.lastClaimTime == currentStore.stakingStartTime) {
+            return 0;
+        }
+
+        uint256 daysElapsed = (currentStore.lastClaimTime - currentStore.stakingStartTime) / SECONDS_IN_A_DAY;
+        uint256 rewards = (rewardAccumulator * daysElapsed * currentStore.principal) / 10000;
+
+        return rewards;
     }
 }
