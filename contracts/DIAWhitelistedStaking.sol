@@ -151,7 +151,6 @@ contract DIAWhitelistedStaking is
             beneficiaryReward
         );
 
-        currentStore.unstakingRequestTime = 0;
         currentStore.lastClaimTime = uint64(block.timestamp);
 
         emit Claimed(
@@ -182,6 +181,24 @@ contract DIAWhitelistedStaking is
 
         if(currentStore.paidOutReward != totalRewards) {
             revert UnclaimedRewards();
+        }
+
+        currentStore.unstakingRequestTime = uint64(block.timestamp);
+        emit UnstakeRequested(msg.sender, stakingStoreIndex);
+    }
+
+    /**
+     * @notice Unstakes the principal amount immediately
+     * @dev Can only be called by the beneficiary.
+     * @param stakingStoreIndex Index of the staking store.
+     */
+    function requestUnstakeWithoutClaim(
+        uint256 stakingStoreIndex
+    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        if (currentStore.unstakingRequestTime != 0) {
+            revert AlreadyRequestedUnstake();
         }
 
         currentStore.unstakingRequestTime = uint64(block.timestamp);
