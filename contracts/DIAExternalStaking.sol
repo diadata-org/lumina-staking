@@ -535,7 +535,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         currentStore.requestedUnstakePrincipalAmount = 0;
         currentStore.requestedUnstakeRewardAmount = 0;
 
-        emit Unstaked(
+        emit Claimed(
             stakingStoreIndex,
             currentStore.requestedUnstakePrincipalRewardAmount,
             currentStore.requestedUnstakePrincipalAmount,

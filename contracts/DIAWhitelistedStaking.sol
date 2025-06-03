@@ -192,7 +192,6 @@ contract DIAWhitelistedStaking is
      * @notice Unstakes the principal amount immediately
      * @dev Only possible for the principal unstaker
      * @param stakingStoreIndex Index of the staking store
-     * @param amount Amount of principal to unstake
      * @custom:revert NotPrincipalUnstaker if caller is not the principal unstaker
      * @custom:revert UnstakingNotRequested if unstaking was not requested
      * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
@@ -215,10 +214,6 @@ contract DIAWhitelistedStaking is
 
         if (currentStore.principalUnstaker != msg.sender) {
             revert NotPrincipalUnstaker();
-        }
-
-        if (amount > currentStore.principal) {
-            revert AmountExceedsStaked();
         }
 
         uint256 principalToSend = currentStore.principal;
@@ -281,7 +276,7 @@ contract DIAWhitelistedStaking is
      */
     function getRewardForStakingStore(
         uint256 stakingStoreIndex
-    ) public view override returns (uint256) {
+    ) public override returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
@@ -289,7 +284,7 @@ contract DIAWhitelistedStaking is
         rewardAccumulator += rewardsAccrued;
         rewardLastUpdateTime = block.timestamp;
 
-        stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+        uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
         currentStore.rewardAccumulator = rewardAccumulator;
         uint256 stakerReward = (stakerDelta * currentStore.principal) / 10000;
 
