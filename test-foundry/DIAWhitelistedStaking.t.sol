@@ -1045,4 +1045,96 @@ contract DIAWhitelistedStakingTest is Test {
         vm.stopPrank();
     }
 
+  
+    function test_CompareSplitUnstakeVsDirectUnstake() public {
+        // Setup initial stake for first scenario
+        vm.startPrank(owner);
+        stakingContract.addWhitelistedStaker(user);
+        deal(address(stakingToken), user, STAKE_AMOUNT * 2);
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT * 2);
+        stakingContract.stake(STAKE_AMOUNT);
+        vm.stopPrank();
+
+        // Fast forward 5 days to accumulate rewards
+        vm.warp(block.timestamp + 5 days);
+
+        // First scenario: Split unstaking
+        vm.startPrank(user);
+        stakingContract.requestUnstake(1);
+        vm.stopPrank();
+
+        // Fast forward past unstaking period
+        vm.warp(block.timestamp + stakingContract.unstakingDuration() + 1);
+
+        // Get initial balances for first scenario
+        uint256 initialUserBalance = stakingToken.balanceOf(user);
+        uint256 initialReward = stakingContract.getRewardForStakingStore(1);
+
+        // First unstake only principal amount
+        vm.startPrank(user);
+        stakingContract.unstakeOnlyPrincipalAmount(1, STAKE_AMOUNT / 2);
+        vm.stopPrank();
+
+        // Now unstake principal with remaining amount
+        vm.startPrank(user);
+        stakingContract.unstakePrincipal(1, STAKE_AMOUNT / 2);
+        vm.stopPrank();
+
+        // Get final balances for first scenario
+        uint256 finalUserBalanceFirstScenario = stakingToken.balanceOf(user);
+        uint256 totalRewardsFirstScenario = finalUserBalanceFirstScenario - initialUserBalance;
+
+        // Reset time and setup second scenario
+        vm.warp(block.timestamp + 1 days); // Add a day to ensure different timestamp
+
+        // Setup second stake
+        vm.startPrank(user);
+        stakingToken.approve(address(stakingContract), STAKE_AMOUNT);
+        stakingContract.stake(STAKE_AMOUNT);
+        vm.stopPrank();
+
+        // Fast forward 5 days to accumulate rewards
+        vm.warp(block.timestamp + 5 days);
+
+        // Second scenario: Direct unstaking
+        vm.startPrank(user);
+        stakingContract.requestUnstake(2);
+        vm.stopPrank();
+
+        // Fast forward past unstaking period
+        vm.warp(block.timestamp + stakingContract.unstakingDuration() + 1);
+
+        // Get initial balance for second scenario
+        uint256 initialUserBalanceSecond = stakingToken.balanceOf(user);
+        uint256 initialRewardSecond = stakingContract.getRewardForStakingStore(2);
+
+        // Unstake principal directly
+        vm.startPrank(user);
+        stakingContract.unstakePrincipal(2, STAKE_AMOUNT);
+        vm.stopPrank();
+
+        // Get final balance for second scenario
+        uint256 finalUserBalanceSecondScenario = stakingToken.balanceOf(user);
+        uint256 totalRewardsSecondScenario = finalUserBalanceSecondScenario - initialUserBalanceSecond;
+
+        // Compare rewards between scenarios
+        assertEq(
+            totalRewardsFirstScenario,
+            totalRewardsSecondScenario,
+            "Rewards should be equal between split and direct unstaking"
+        );
+
+        // Verify initial rewards were equal
+        assertEq(
+            initialReward,
+            initialRewardSecond,
+            "Initial rewards should be equal"
+        );
+
+        // Log the rewards for verification
+        console.log("First scenario total rewards:", totalRewardsFirstScenario);
+        console.log("Second scenario total rewards:", totalRewardsSecondScenario);
+    }
+
 }

@@ -212,7 +212,7 @@ contract DIAWhitelistedStaking is
         currentStore.principal = currentStore.principal - amount;
 
         tokensStaked -= amount;
-        currentStore.unstakingRequestTime = 0;
+        // currentStore.unstakingRequestTime = 0;
         // no need to reset as rewards are skip from this tx
         // currentStore.stakingStartTime = uint64(block.timestamp);
 
