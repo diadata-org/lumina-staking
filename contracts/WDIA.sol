@@ -30,6 +30,7 @@ contract WDIA is IERC20 {
     error ZeroAddress();
     error ZeroTransferAmount();
     error InsufficientAllowance();
+    error NonEmptyCalldata();
 
     event Deposit(address indexed dst, uint wad);
     event Withdrawal(address indexed src, uint wad);
@@ -38,6 +39,11 @@ contract WDIA is IERC20 {
     mapping(address => mapping(address => uint)) public allowance;
 
     receive() external payable {
+        deposit();
+    }
+
+    fallback() external payable {
+        if (msg.data.length > 0) revert NonEmptyCalldata();
         deposit();
     }
 
