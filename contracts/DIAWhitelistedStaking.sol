@@ -355,7 +355,7 @@ contract DIAWhitelistedStaking is
 
     function _getTotalRewards(
         uint256 stakingStoreIndex
-    ) internal view returns (uint256) {
+    ) internal returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         if(currentStore.lastClaimTime == currentStore.stakingStartTime) {
