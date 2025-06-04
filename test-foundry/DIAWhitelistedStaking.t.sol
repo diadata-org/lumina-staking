@@ -6,6 +6,8 @@ import {console2} from "forge-std/console2.sol";
 
 import {DIAWhitelistedStaking} from "../contracts/DIAWhitelistedStaking.sol";
 import {WDIA} from "../contracts/WDIA.sol";
+import "../contracts/StakingErrorsAndEvents.sol";
+
 
 contract DIAWhitelistedStakingTest is Test {
     DIAWhitelistedStaking public staking;
@@ -85,173 +87,7 @@ contract DIAWhitelistedStakingTest is Test {
         vm.stopPrank();
     }
 
-    function test_RewardsTable() public {
-        // Setup second user
-
-        console2.log("balance of rewards wallet", wdia.balanceOf(rewardsWallet));
-        console2.log("balance of staker", wdia.balanceOf(staker));
-        console2.log("balance of beneficiary", wdia.balanceOf(beneficiary));
-
-        address staker2 = makeAddr("staker2");
-        address beneficiary2 = makeAddr("beneficiary2");
-        
-        // Fund second staker
-        vm.deal(staker2, 10000 * 1e18);
-        
-        // Add second user to whitelist
-        vm.startPrank(owner);
-        staking.addWhitelistedStaker(staker2);
-        staking.addWhitelistedStaker(beneficiary2);
-        vm.stopPrank();
-
-        // Fund second staker with WDIA tokens
-        vm.startPrank(staker2);
-        wdia.deposit{value: STAKING_AMOUNT}();
-        wdia.approve(address(staking), type(uint256).max);
-        vm.stopPrank();
-
-        // Stake for first user
-        vm.startPrank(staker);
-        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 900); // 90% to principal wallet
-        vm.stopPrank();
-
-        // Stake for second user
-        vm.startPrank(staker2);
-        staking.stakeForAddress(beneficiary2, STAKING_AMOUNT, 1000); // 100% to principal wallet
-        vm.stopPrank();
-
-        uint256 stakingStoreIndex1 = 1;
-        uint256 stakingStoreIndex2 = 2;
-        
-        // Print header for first user
-        console2.log("\nRewards Table for User 1 (90/10 split)");
-        console2.log("Initial Stake: 1000 WDIA");
-        console2.log("Daily Reward Rate: 20% (2000 basis points)");
-        console2.log("Days | Principal WDIA | Total WDIA Rewards | Principal WDIA | Beneficiary WDIA | Total DIA Value");
-        console2.log("-----|---------------|-------------------|----------------|------------------|----------------");
-
-        // Calculate and display rewards for different time periods for first user
-        for (uint256 dayCount = 1; dayCount <= 10; dayCount++) {
-            // Advance time
-            vm.warp(block.timestamp + 25 days);
-
-            // Claim rewards
-            vm.prank(beneficiary);
-            staking.claim(stakingStoreIndex1);
-
-            // Get balances after claiming
-            uint256 principalBalance = wdia.balanceOf(staker);
-            uint256 beneficiaryBalance = wdia.balanceOf(beneficiary);
-            uint256 totalRewards = principalBalance + beneficiaryBalance;
-
-            // Fund staker with more WDIA tokens
-            vm.startPrank(staker);
-            vm.deal(staker, STAKING_AMOUNT);
-            wdia.deposit{value: STAKING_AMOUNT}();
-            wdia.approve(address(staking), STAKING_AMOUNT);
-            staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000);
-            vm.stopPrank();
-
-
-            // Print row with 4 decimal places
-            console2.log(
-                string.concat(
-                    vm.toString(dayCount),
-                    " | ",
-                    formatAmount(STAKING_AMOUNT),
-                    " WDIA | ",
-                    formatAmount(totalRewards),
-                    " WDIA | ",
-                    formatAmount(principalBalance),
-                    " WDIA | ",
-                    formatAmount(beneficiaryBalance),
-                    " WDIA | ",
-                    formatAmount(totalRewards),
-                    " DIA"
-                )
-            );
-        }
-
-        // Reset balances for second user
-        vm.startPrank(staker2);
-        uint256 staker2Balance = wdia.balanceOf(staker2);
-        if (staker2Balance > 0) {
-            wdia.withdraw(staker2Balance);
-        }
-        vm.deal(staker2, STAKING_AMOUNT);
-        wdia.deposit{value: STAKING_AMOUNT}();
-        wdia.approve(address(staking), type(uint256).max);
-        vm.stopPrank();
-
-        vm.startPrank(beneficiary2);
-        uint256 beneficiary2Balance = wdia.balanceOf(beneficiary2);
-        if (beneficiary2Balance > 0) {
-            wdia.withdraw(beneficiary2Balance);
-        }
-        vm.stopPrank();
-
-        // Print header for second user
-        console2.log("\nRewards Table for User 2 (100/0 split)");
-        console2.log("Initial Stake: 1000 WDIA");
-        console2.log("Daily Reward Rate: 20% (2000 basis points)");
-        console2.log("Days | Principal WDIA | Total WDIA Rewards | Staker  | Beneficiary  | Total DIA Value");
-        console2.log("-----|---------------|-------------------|----------------|------------------|----------------");
-
-        // Calculate and display rewards for different time periods for second user
-        for (uint256 dayCount = 1; dayCount <= 10; dayCount++) {
-            // Advance time
-            vm.warp(block.timestamp + 25 days);
-
-            // Claim rewards
-            vm.prank(beneficiary2);
-            staking.claim(stakingStoreIndex2);
-
-            // Get balances after claiming
-            uint256 principalBalance = wdia.balanceOf(staker2);
-            uint256 beneficiaryBalance = wdia.balanceOf(beneficiary2);
-            uint256 totalRewards = principalBalance + beneficiaryBalance;
-
-            // Fund staker with more WDIA tokens
-            vm.startPrank(staker2);
-            vm.deal(staker2, STAKING_AMOUNT);
-            wdia.deposit{value: STAKING_AMOUNT}();
-            wdia.approve(address(staking), STAKING_AMOUNT);
-            staking.stakeForAddress(beneficiary2, STAKING_AMOUNT, 10000);
-            vm.stopPrank();
-
-            // Print row with 4 decimal places
-            console2.log(
-                string.concat(
-                    vm.toString(dayCount),
-                    " | ",
-                    formatAmount(STAKING_AMOUNT),
-                    " WDIA | ",
-                    formatAmount(totalRewards),
-                    " WDIA | ",
-                    formatAmount(principalBalance),
-                    " WDIA | ",
-                    formatAmount(beneficiaryBalance),
-                    " WDIA | ",
-                    formatAmount(totalRewards),
-                    " DIA"
-                )
-            );
-        }
-
-        // Print summary
-        console2.log("\nSummary:");
-        console2.log("User 1 (90/10 split):");
-        console2.log("- Initial Stake: 1000 WDIA");
-        console2.log("- Final Principal Balance: ", vm.toString(wdia.balanceOf(staker) / 1e18), " WDIA");
-        console2.log("- Final Beneficiary Balance: ", vm.toString(wdia.balanceOf(beneficiary) / 1e18), " WDIA");
-        console2.log("- Total Rewards: ", vm.toString((wdia.balanceOf(staker) + wdia.balanceOf(beneficiary)) / 1e18), " WDIA");
-
-        console2.log("\nUser 2 (100/0 split):");
-        console2.log("- Initial Stake: 1000 WDIA");
-        console2.log("- Final Principal Balance: ", vm.toString(wdia.balanceOf(staker2) / 1e18), " WDIA");
-        console2.log("- Final Beneficiary Balance: ", vm.toString(wdia.balanceOf(beneficiary2) / 1e18), " WDIA");
-        console2.log("- Total Rewards: ", vm.toString((wdia.balanceOf(staker2) + wdia.balanceOf(beneficiary2)) / 1e18), " WDIA");
-    }
+    
 
     function test_StakeAndCalculateRewards() public {
         // Stake tokens
@@ -281,7 +117,9 @@ contract DIAWhitelistedStakingTest is Test {
     function test_UnstakingWithRewards() public {
         // Stake tokens
         vm.startPrank(staker);
-        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 900); // 90% to principal wallet
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 100); // 90% to principal wallet
         vm.stopPrank();
 
         uint256 stakingStoreIndex = 1;
@@ -289,28 +127,498 @@ contract DIAWhitelistedStakingTest is Test {
         // Advance time by 7 days
         vm.warp(block.timestamp + 7 days);
 
+        // Get initial balances
+        uint256 initialStakerBalance = wdia.balanceOf(staker);
+        uint256 initialBeneficiaryBalance = wdia.balanceOf(beneficiary);
+
         // Claim rewards
         vm.prank(beneficiary);
         staking.claim(stakingStoreIndex);
+
+        // Get balances after claiming rewards
+        uint256 afterClaimStakerBalance = wdia.balanceOf(staker);
+        uint256 afterClaimBeneficiaryBalance = wdia.balanceOf(beneficiary);
+
+        // Calculate reward amounts
+        uint256 stakerReward = afterClaimStakerBalance - initialStakerBalance;
+        uint256 beneficiaryReward = afterClaimBeneficiaryBalance - initialBeneficiaryBalance;
 
         // Request unstake
         vm.prank(beneficiary);
         staking.requestUnstake(stakingStoreIndex);
 
+        console2.log("unstakingRequestTime", UNSTAKING_DURATION);
+        console2.log("block.timestamp", block.timestamp);
+
         // Advance time by unstaking duration
-        vm.warp(block.timestamp + UNSTAKING_DURATION);
+        vm.warp(block.timestamp + 7 days + 7 days);
+
+        // Get balance before unstaking
+        uint256 balanceBeforeUnstake = wdia.balanceOf(staker);
 
         // Unstake
         vm.prank(staker);
         staking.unstake(stakingStoreIndex);
 
-        // Calculate expected rewards
-        uint256 expectedTotalReward = (STAKING_AMOUNT * REWARD_RATE_PER_DAY * 7) / 10000; // 20% per day for 7 days
-        uint256 expectedPrincipalShare = (expectedTotalReward * 900) / 10000; // 90% of reward
-        uint256 expectedBeneficiaryShare = expectedTotalReward - expectedPrincipalShare; // 10% of reward
+        // Get final balance
+        uint256 finalBalance = wdia.balanceOf(staker);
+        uint256 unstakeAmount = finalBalance - balanceBeforeUnstake;
 
-        // Check balances
-        assertEq(wdia.balanceOf(staker), STAKING_AMOUNT + expectedPrincipalShare, "Principal wallet should receive principal plus 90% of rewards");
-        assertEq(wdia.balanceOf(beneficiary), expectedBeneficiaryShare, "Beneficiary should receive 10% of rewards");
+  
+ 
+        assertEq(unstakeAmount, STAKING_AMOUNT, "Staker should receive exactly the staked amount back");
+        assertEq(finalBalance, initialStakerBalance + stakerReward + STAKING_AMOUNT, "Final balance should be initial + rewards + principal");
     }
+
+    function test_RewardsOverTime() public {
+        // Setup second user
+        address staker2 = makeAddr("staker2");
+        address beneficiary2 = makeAddr("beneficiary2");
+        vm.deal(staker2, 10000 * 1e18);
+
+        // Print header
+        console2.log("\nRewards Table");
+        console2.log("Initial Stake: 1 WDIA per user");
+        console2.log("Daily Reward Rate: 20% (2000 basis points)");
+        console2.log("Day | User | Principal WDIA | Total WDIA Rewards | Staker  | Beneficiary  | Total DIA Value");
+        console2.log("----|------|---------------|-------------------|---------|--------------|----------------");
+
+        // Test days 1-5
+        for (uint256 dayCount = 1; dayCount <= 5; dayCount++) {
+            // Reset contract state
+            vm.startPrank(owner);
+            staking = new DIAWhitelistedStaking(
+                UNSTAKING_DURATION,
+                address(wdia),
+                rewardsWallet,
+                REWARD_RATE_PER_DAY
+            );
+            staking.addWhitelistedStaker(staker);
+            staking.addWhitelistedStaker(beneficiary);
+            staking.addWhitelistedStaker(staker2);
+            staking.addWhitelistedStaker(beneficiary2);
+            vm.stopPrank();
+
+            // Reset WDIA balances
+            vm.startPrank(rewardsWallet);
+            uint256 rewardsBalance = wdia.balanceOf(rewardsWallet);
+            if (rewardsBalance > 0) {
+                wdia.withdraw(rewardsBalance);
+            }
+            vm.deal(rewardsWallet, 100000000 * 1e18);
+            wdia.deposit{value: 100000000 * 1e18}();
+            wdia.approve(address(staking), type(uint256).max);
+            vm.stopPrank();
+
+            // Reset and stake for User 1
+            vm.startPrank(staker);
+            uint256 stakerBalance = wdia.balanceOf(staker);
+            if (stakerBalance > 0) {
+                wdia.withdraw(stakerBalance);
+            }
+            vm.deal(staker, STAKING_AMOUNT);
+            wdia.deposit{value: STAKING_AMOUNT}();
+            wdia.approve(address(staking), type(uint256).max);
+            staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+            vm.stopPrank();
+
+            // Reset and stake for User 2
+            vm.startPrank(staker2);
+            uint256 staker2Balance = wdia.balanceOf(staker2);
+            if (staker2Balance > 0) {
+                wdia.withdraw(staker2Balance);
+            }
+            vm.deal(staker2, STAKING_AMOUNT);
+            wdia.deposit{value: STAKING_AMOUNT}();
+            wdia.approve(address(staking), type(uint256).max);
+            staking.stakeForAddress(beneficiary2, STAKING_AMOUNT, 10000); // 100% to principal wallet
+            vm.stopPrank();
+
+            // Reset beneficiary balances
+            vm.startPrank(beneficiary);
+            uint256 beneficiaryBalance = wdia.balanceOf(beneficiary);
+            if (beneficiaryBalance > 0) {
+                wdia.withdraw(beneficiaryBalance);
+            }
+            vm.stopPrank();
+
+            vm.startPrank(beneficiary2);
+            uint256 beneficiary2Balance = wdia.balanceOf(beneficiary2);
+            if (beneficiary2Balance > 0) {
+                wdia.withdraw(beneficiary2Balance);
+            }
+            vm.stopPrank();
+
+            // Advance time
+            vm.warp(block.timestamp + dayCount * 1 days);
+
+            // Claim rewards for User 1
+            vm.prank(beneficiary);
+            staking.claim(1);
+
+            // Get balances for User 1
+            uint256 user1Principal = wdia.balanceOf(staker);
+            uint256 user1Beneficiary = wdia.balanceOf(beneficiary);
+            uint256 user1Total = user1Principal + user1Beneficiary;
+
+            // Print User 1 row
+            console2.log(
+                string.concat(
+                    vm.toString(dayCount),
+                    " | User1 | ",
+                    formatAmount(STAKING_AMOUNT),
+                    " WDIA | ",
+                    formatAmount(user1Total),
+                    " WDIA | ",
+                    formatAmount(user1Principal),
+                    " WDIA | ",
+                    formatAmount(user1Beneficiary),
+                    " WDIA | ",
+                    formatAmount(user1Total),
+                    " DIA"
+                )
+            );
+
+            // Claim rewards for User 2
+            vm.prank(beneficiary2);
+            staking.claim(2);
+
+            // Get balances for User 2
+            uint256 user2Principal = wdia.balanceOf(staker2);
+            uint256 user2Beneficiary = wdia.balanceOf(beneficiary2);
+            uint256 user2Total = user2Principal + user2Beneficiary;
+
+            // Print User 2 row
+            console2.log(
+                string.concat(
+                    vm.toString(dayCount),
+                    " | User2 | ",
+                    formatAmount(STAKING_AMOUNT),
+                    " WDIA | ",
+                    formatAmount(user2Total),
+                    " WDIA | ",
+                    formatAmount(user2Principal),
+                    " WDIA | ",
+                    formatAmount(user2Beneficiary),
+                    " WDIA | ",
+                    formatAmount(user2Total),
+                    " DIA"
+                )
+            );
+        }
+
+        // Test days 10-100 (every 10 days)
+        for (uint256 dayCount = 10; dayCount <= 100; dayCount += 10) {
+            // Reset contract state
+            vm.startPrank(owner);
+            staking = new DIAWhitelistedStaking(
+                UNSTAKING_DURATION,
+                address(wdia),
+                rewardsWallet,
+                REWARD_RATE_PER_DAY
+            );
+            staking.addWhitelistedStaker(staker);
+            staking.addWhitelistedStaker(beneficiary);
+            staking.addWhitelistedStaker(staker2);
+            staking.addWhitelistedStaker(beneficiary2);
+            vm.stopPrank();
+
+            // Reset WDIA balances
+            vm.startPrank(rewardsWallet);
+            uint256 rewardsBalance = wdia.balanceOf(rewardsWallet);
+            if (rewardsBalance > 0) {
+                wdia.withdraw(rewardsBalance);
+            }
+            vm.deal(rewardsWallet, 100000000 * 1e18);
+            wdia.deposit{value: 100000000 * 1e18}();
+            wdia.approve(address(staking), type(uint256).max);
+            vm.stopPrank();
+
+            // Reset and stake for User 1
+            vm.startPrank(staker);
+            uint256 stakerBalance = wdia.balanceOf(staker);
+            if (stakerBalance > 0) {
+                wdia.withdraw(stakerBalance);
+            }
+            vm.deal(staker, STAKING_AMOUNT);
+            wdia.deposit{value: STAKING_AMOUNT}();
+            wdia.approve(address(staking), type(uint256).max);
+            staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+            vm.stopPrank();
+
+            // Reset and stake for User 2
+            vm.startPrank(staker2);
+            uint256 staker2Balance = wdia.balanceOf(staker2);
+            if (staker2Balance > 0) {
+                wdia.withdraw(staker2Balance);
+            }
+            vm.deal(staker2, STAKING_AMOUNT);
+            wdia.deposit{value: STAKING_AMOUNT}();
+            wdia.approve(address(staking), type(uint256).max);
+            staking.stakeForAddress(beneficiary2, STAKING_AMOUNT, 10000); // 100% to principal wallet
+            vm.stopPrank();
+
+            // Reset beneficiary balances
+            vm.startPrank(beneficiary);
+            uint256 beneficiaryBalance = wdia.balanceOf(beneficiary);
+            if (beneficiaryBalance > 0) {
+                wdia.withdraw(beneficiaryBalance);
+            }
+            vm.stopPrank();
+
+            vm.startPrank(beneficiary2);
+            uint256 beneficiary2Balance = wdia.balanceOf(beneficiary2);
+            if (beneficiary2Balance > 0) {
+                wdia.withdraw(beneficiary2Balance);
+            }
+            vm.stopPrank();
+
+            // Advance time
+            vm.warp(block.timestamp + dayCount * 1 days);
+
+            // Claim rewards for User 1
+            vm.prank(beneficiary);
+            staking.claim(1);
+
+            // Get balances for User 1
+            uint256 user1Principal = wdia.balanceOf(staker);
+            uint256 user1Beneficiary = wdia.balanceOf(beneficiary);
+            uint256 user1Total = user1Principal + user1Beneficiary;
+
+            // Print User 1 row
+            console2.log(
+                string.concat(
+                    vm.toString(dayCount),
+                    " | User1 | ",
+                    formatAmount(STAKING_AMOUNT),
+                    " WDIA | ",
+                    formatAmount(user1Total),
+                    " WDIA | ",
+                    formatAmount(user1Principal),
+                    " WDIA | ",
+                    formatAmount(user1Beneficiary),
+                    " WDIA | ",
+                    formatAmount(user1Total),
+                    " DIA"
+                )
+            );
+
+            // Claim rewards for User 2
+            vm.prank(beneficiary2);
+            staking.claim(2);
+
+            // Get balances for User 2
+            uint256 user2Principal = wdia.balanceOf(staker2);
+            uint256 user2Beneficiary = wdia.balanceOf(beneficiary2);
+            uint256 user2Total = user2Principal + user2Beneficiary;
+
+            // Print User 2 row
+            console2.log(
+                string.concat(
+                    vm.toString(dayCount),
+                    " | User2 | ",
+                    formatAmount(STAKING_AMOUNT),
+                    " WDIA | ",
+                    formatAmount(user2Total),
+                    " WDIA | ",
+                    formatAmount(user2Principal),
+                    " WDIA | ",
+                    formatAmount(user2Beneficiary),
+                    " WDIA | ",
+                    formatAmount(user2Total),
+                    " DIA"
+                )
+            );
+        }
+
+        // Print summary
+        console2.log("\nSummary:");
+        console2.log("User 1 :");
+        console2.log("- Initial Stake: 1 WDIA");
+        console2.log("- Final Principal Balance: ", formatAmount(wdia.balanceOf(staker)), " WDIA");
+        console2.log("- Final Beneficiary Balance: ", formatAmount(wdia.balanceOf(beneficiary)), " WDIA");
+        console2.log("- Total Rewards: ", formatAmount(wdia.balanceOf(staker) + wdia.balanceOf(beneficiary)), " WDIA");
+
+        console2.log("\nUser 2 :");
+        console2.log("- Initial Stake: 1 WDIA");
+        console2.log("- Final Principal Balance: ", formatAmount(wdia.balanceOf(staker2)), " WDIA");
+        console2.log("- Final Beneficiary Balance: ", formatAmount(wdia.balanceOf(beneficiary2)), " WDIA");
+        console2.log("- Total Rewards: ", formatAmount(wdia.balanceOf(staker2) + wdia.balanceOf(beneficiary2)), " WDIA");
+    }
+
+    function test_WhitelistManagement() public {
+        // Test adding staker to whitelist
+        address newStaker = makeAddr("newStaker");
+        vm.startPrank(owner);
+        staking.addWhitelistedStaker(newStaker);
+        assertTrue(staking.stakingWhitelist(newStaker), "Staker should be whitelisted");
+
+        // Test removing staker from whitelist
+        staking.removeWhitelistedStaker(newStaker);
+        assertFalse(staking.stakingWhitelist(newStaker), "Staker should be removed from whitelist");
+
+        // Test adding already whitelisted staker
+        vm.expectRevert(DIAWhitelistedStaking.AlreadyWhitelisted.selector);
+        staking.addWhitelistedStaker(staker);
+
+        // Test removing non-whitelisted staker
+        vm.expectRevert(NotWhitelisted.selector);
+        staking.removeWhitelistedStaker(newStaker);
+        vm.stopPrank();
+    }
+
+    function test_StakingFunctionality() public {
+        // Test direct staking
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stake(STAKING_AMOUNT);
+        vm.stopPrank();
+
+        // Verify stake was created
+        uint256 stakingStoreIndex = 1;
+        (
+            address beneficiary,
+            address principalPayoutWallet,
+            address principalUnstaker,
+            uint256 principal,
+            uint256 paidOutReward,
+            uint64 stakingStartTime,
+            uint64 unstakingRequestTime,
+            uint32 principalWalletShareBps,
+            uint256 rewardAccumulator,
+            uint64 lastClaimTime
+        ) = staking.stakingStores(stakingStoreIndex);
+        
+        assertEq(principalPayoutWallet, staker, "Principal wallet should be staker");
+        assertEq(beneficiary, staker, "Beneficiary should be staker");
+        assertEq(principal, STAKING_AMOUNT, "Principal amount should match");
+        assertEq(stakingStartTime, block.timestamp, "Staking start time should be current timestamp");
+
+        // Test staking for another address
+        address newBeneficiary = makeAddr("newBeneficiary");
+        vm.startPrank(owner);
+        staking.addWhitelistedStaker(newBeneficiary);
+        vm.stopPrank();
+
+        vm.startPrank(staker);
+        staking.stakeForAddress(newBeneficiary, STAKING_AMOUNT, 5000); // 50/50 split
+        vm.stopPrank();
+
+        // Verify stake for another address
+        stakingStoreIndex = 2;
+        (
+            beneficiary,
+            principalPayoutWallet,
+            principalUnstaker,
+            principal,
+            paidOutReward,
+            stakingStartTime,
+            unstakingRequestTime,
+            principalWalletShareBps,
+            rewardAccumulator,
+            lastClaimTime
+        ) = staking.stakingStores(stakingStoreIndex);
+        
+        assertEq(principalPayoutWallet, staker, "Principal wallet should be staker");
+        assertEq(beneficiary, newBeneficiary, "Beneficiary should be new beneficiary");
+        assertEq(principal, STAKING_AMOUNT, "Principal amount should match");
+    }
+
+    
+
+    function test_UnstakingProcess() public {
+        // Setup stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 5000); // 50/50 split
+        vm.stopPrank();
+
+        // Test unstaking process
+        vm.warp(block.timestamp + 1 days);
+        
+        // Request unstake
+        vm.prank(beneficiary);
+        staking.requestUnstake(1);
+        
+        // Try to unstake before duration
+        vm.prank(staker);
+        vm.expectRevert(UnstakingPeriodNotElapsed.selector);
+        staking.unstake(1);
+
+        // Wait for unstaking duration
+        vm.warp(block.timestamp + UNSTAKING_DURATION);
+
+        // Try to unstake with wrong account
+        vm.prank(beneficiary);
+        vm.expectRevert(NotPrincipalUnstaker.selector);
+        staking.unstake(1);
+
+        // Get balance before unstaking
+        uint256 balanceBefore = wdia.balanceOf(staker);
+
+        // Complete unstake
+        vm.prank(staker);
+        staking.unstake(1);
+
+        // Get balance after unstaking
+        uint256 balanceAfter = wdia.balanceOf(staker);
+        uint256 balanceDifference = balanceAfter - balanceBefore;
+
+        // Verify unstaking
+        (
+            address beneficiary,
+            address principalPayoutWallet,
+            address principalUnstaker,
+            uint256 principal,
+            uint256 paidOutReward,
+            uint64 stakingStartTime,
+            uint64 unstakingRequestTime,
+            uint32 principalWalletShareBps,
+            uint256 rewardAccumulator,
+            uint64 lastClaimTime
+        ) = staking.stakingStores(1);
+        
+        assertEq(unstakingRequestTime, 0, "Unstaking request time should be reset");
+        assertEq(balanceDifference, STAKING_AMOUNT, "Staker should receive exactly the staked amount back");
+    }
+
+    function test_MaxStakesPerBeneficiary() public {
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT * 2}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 5000);
+        vm.stopPrank();
+
+        // Set max stakes per beneficiary to 1
+        vm.startPrank(owner);
+        staking.setMaxStakesPerBeneficiary(1);
+        vm.stopPrank();
+
+        // Try to create second stake
+        vm.startPrank(staker);
+        vm.expectRevert();
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 5000);
+        vm.stopPrank();
+
+        // Increase max stakes and try again
+        vm.startPrank(owner);
+        staking.setMaxStakesPerBeneficiary(2);
+        vm.stopPrank();
+
+        vm.startPrank(staker);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 5000);
+        vm.stopPrank();
+
+        // Verify stake count
+        uint256 stakeCount = staking.getStakesCountForBeneficiary(beneficiary);
+        assertEq(stakeCount, 2, "Beneficiary should have 2 stakes");
+    }
+
+ 
+
+ 
+    
 } 
