@@ -10,6 +10,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./DIARewardsDistribution.sol";
 
+import "forge-std/console2.sol";
+
 /**
  * @title DIAWhitelistedStaking
  * @notice This contract allows whitelisted addresses to stake tokens and earn rewards.
@@ -335,13 +337,11 @@ contract DIAWhitelistedStaking is
         bool success = _updateRewardAccumulator();
         uint256 stakerReward;
         uint256 stakerDelta;
-        uint256 daysElapsed;
 
         if(success) {
-            daysElapsed = (block.timestamp - currentStore.lastClaimTime) / SECONDS_IN_A_DAY;
             stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
             currentStore.rewardAccumulator = rewardAccumulator;
-            stakerReward = (stakerDelta * currentStore.principal * daysElapsed) / 10000;
+            stakerReward = (stakerDelta * currentStore.principal) / 10000;
         }
 
         return stakerReward;
@@ -377,11 +377,9 @@ contract DIAWhitelistedStaking is
 
         bool success = _updateRewardAccumulator();
         uint256 rewards;
-        uint256 totalStakeDuration;
 
         if (success) {
-            totalStakeDuration = (block.timestamp - currentStore.stakingStartTime) / SECONDS_IN_A_DAY;
-            rewards = (rewardAccumulator * totalStakeDuration * currentStore.principal) / 10000;
+            rewards = (rewardAccumulator * currentStore.principal) / 10000;
         }
 
         return rewards;
