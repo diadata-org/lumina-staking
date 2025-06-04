@@ -2,7 +2,7 @@
 pragma solidity ^0.8.29;
 
 import "forge-std/Script.sol";
-import "../contracts/DIAExternalStakingMock.sol";
+import "../contracts/DIAExternalStaking.sol";
 import "../contracts/DIAWhitelistedStaking.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
@@ -19,7 +19,7 @@ contract DeployStaking is Script {
         vm.startBroadcast();
 
         // Deploy DIAExternalStaking
-        DIAExternalStakingMock externalStaking = new DIAExternalStakingMock(
+        DIAExternalStaking externalStaking = new DIAExternalStaking(
             unstakingDuration,
             stakingToken,
             stakingLimit
