@@ -346,7 +346,12 @@ contract DIAWhitelistedStaking is
 
         return stakerReward;
     }
-    
+
+    /**
+     * @notice Updates the reward accumulator
+     * @dev Updates the reward accumulator based on the daysElapsed since rewardLastUpdateTime
+     * @return true if the reward accumulator was updated, false otherwise
+     */
     function _updateRewardAccumulator() internal returns (bool) {
         uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
         uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
@@ -356,6 +361,11 @@ contract DIAWhitelistedStaking is
         return true;
     }
 
+    /**
+     * @notice Calculates the total rewards for a given staking store
+     * @param stakingStoreIndex The index of the staking store
+     * @return The total rewards accumulated
+     */
     function _getTotalRewards(
         uint256 stakingStoreIndex
     ) internal returns (uint256) {
