@@ -145,11 +145,13 @@ contract DIAWhitelistedStaking is
             );
         }
 
-        STAKING_TOKEN.safeTransferFrom(
-            rewardsWallet,
-            currentStore.beneficiary,
-            beneficiaryReward
-        );
+        if(beneficiaryReward > 0) {
+            STAKING_TOKEN.safeTransferFrom(
+                rewardsWallet,
+                currentStore.beneficiary,
+                beneficiaryReward
+            );
+        }
 
         currentStore.lastClaimTime = uint64(block.timestamp);
 
@@ -296,14 +298,14 @@ contract DIAWhitelistedStaking is
     ) public override returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
-        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed) / 10000;
-        rewardAccumulator += rewardsAccrued;
-        rewardLastUpdateTime = block.timestamp;
+        bool success = _updateRewardAccumulator();
+        uint256 stakerReward;
 
-        uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
-        currentStore.rewardAccumulator = rewardAccumulator;
-        uint256 stakerReward = (stakerDelta * currentStore.principal) / 10000;
+        if(success) {
+            uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+            currentStore.rewardAccumulator = rewardAccumulator;
+           stakerReward = (stakerDelta * currentStore.principal) / 10000;
+        }
 
         return stakerReward;
     }
@@ -342,6 +344,15 @@ contract DIAWhitelistedStaking is
         return stakingIndicesByBeneficiary[beneficiary].length;
     }
 
+    function _updateRewardAccumulator() internal returns (bool) {
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
+        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
+        rewardAccumulator += rewardsAccrued;
+        rewardLastUpdateTime = block.timestamp;
+
+        return true;
+    }
+
     function _getTotalRewards(
         uint256 stakingStoreIndex
     ) internal view returns (uint256) {
@@ -351,8 +362,13 @@ contract DIAWhitelistedStaking is
             return 0;
         }
 
-        uint256 daysElapsed = (currentStore.lastClaimTime - currentStore.stakingStartTime) / SECONDS_IN_A_DAY;
-        uint256 rewards = (rewardAccumulator * daysElapsed * currentStore.principal) / 10000;
+        bool success =_updateRewardAccumulator();
+        uint256 rewards;
+
+        if (success) {
+            uint256 totalStakeDuration = (block.timestamp - currentStore.stakingStartTime) / SECONDS_IN_A_DAY;
+            rewards = (rewardAccumulator * totalStakeDuration * currentStore.principal) / 10000;
+        }
 
         return rewards;
     }
