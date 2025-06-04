@@ -288,32 +288,6 @@ contract DIAWhitelistedStaking is
     }
 
     /**
-     * @notice Calculates the accrued reward for a given staking store
-     * @dev The reward is calculated based on the number of full days passed since staking started
-     * @param stakingStoreIndex The index of the staking store
-     * @return The total reward accumulated so far
-     */
-    function _getRewardForStakingStore(
-        uint256 stakingStoreIndex
-    ) internal returns (uint256) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-
-        bool success = _updateRewardAccumulator();
-        uint256 stakerReward;
-        uint256 stakerDelta;
-        uint256 daysElapsed;
-
-        if(success) {
-            daysElapsed = (block.timestamp - currentStore.lastClaimTime) / SECONDS_IN_A_DAY;
-            stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
-            currentStore.rewardAccumulator = rewardAccumulator;
-            stakerReward = (stakerDelta * currentStore.principal * daysElapsed) / 10000;
-        }
-
-        return stakerReward;
-    }
-
-    /**
      * @notice Get the current principal wallet share basis points for a stake
      * @param stakeId The ID of the stake to check
      * @return The current principal wallet share in basis points
@@ -347,6 +321,32 @@ contract DIAWhitelistedStaking is
         return stakingIndicesByBeneficiary[beneficiary].length;
     }
 
+    /**
+     * @notice Calculates the accrued reward for a given staking store
+     * @dev The reward is calculated based on the number of full days passed since staking started
+     * @param stakingStoreIndex The index of the staking store
+     * @return The total reward accumulated so far
+     */
+    function _getRewardForStakingStore(
+        uint256 stakingStoreIndex
+    ) internal returns (uint256) {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        bool success = _updateRewardAccumulator();
+        uint256 stakerReward;
+        uint256 stakerDelta;
+        uint256 daysElapsed;
+
+        if(success) {
+            daysElapsed = (block.timestamp - currentStore.lastClaimTime) / SECONDS_IN_A_DAY;
+            stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+            currentStore.rewardAccumulator = rewardAccumulator;
+            stakerReward = (stakerDelta * currentStore.principal * daysElapsed) / 10000;
+        }
+
+        return stakerReward;
+    }
+    
     function _updateRewardAccumulator() internal returns (bool) {
         uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
         uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
