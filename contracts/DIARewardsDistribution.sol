@@ -94,14 +94,4 @@ abstract contract DIARewardsDistribution is Ownable {
         emit RewardsWalletUpdated(rewardsWallet, newWalletAddress);
         rewardsWallet = newWalletAddress;
     }
-
-    /**
-     * @notice Calculates the reward for a given staking store
-     * @dev Must be implemented by inheriting contracts
-     * @param stakingStoreIndex The index of the staking store
-     * @return The calculated reward amount
-     */
-    function getRewardForStakingStore(
-        uint256 stakingStoreIndex
-    ) public virtual returns (uint256);
 }

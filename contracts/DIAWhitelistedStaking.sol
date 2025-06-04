@@ -129,7 +129,7 @@ contract DIAWhitelistedStaking is
     ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        uint256 rewardToSend = getRewardForStakingStore(stakingStoreIndex);
+        uint256 rewardToSend =_getRewardForStakingStore(stakingStoreIndex);
         currentStore.paidOutReward += rewardToSend;
 
         uint256 principalWalletReward = (rewardToSend *
@@ -293,18 +293,21 @@ contract DIAWhitelistedStaking is
      * @param stakingStoreIndex The index of the staking store
      * @return The total reward accumulated so far
      */
-    function getRewardForStakingStore(
+    function _getRewardForStakingStore(
         uint256 stakingStoreIndex
-    ) public override returns (uint256) {
+    ) internal returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         bool success = _updateRewardAccumulator();
         uint256 stakerReward;
+        uint256 stakerDelta;
+        uint256 daysElapsed;
 
         if(success) {
-            uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+            daysElapsed = (block.timestamp - currentStore.lastClaimTime) / SECONDS_IN_A_DAY;
+            stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
             currentStore.rewardAccumulator = rewardAccumulator;
-           stakerReward = (stakerDelta * currentStore.principal) / 10000;
+            stakerReward = (stakerDelta * currentStore.principal * daysElapsed) / 10000;
         }
 
         return stakerReward;
@@ -362,11 +365,12 @@ contract DIAWhitelistedStaking is
             return 0;
         }
 
-        bool success =_updateRewardAccumulator();
+        bool success = _updateRewardAccumulator();
         uint256 rewards;
+        uint256 totalStakeDuration;
 
         if (success) {
-            uint256 totalStakeDuration = (block.timestamp - currentStore.stakingStartTime) / SECONDS_IN_A_DAY;
+            totalStakeDuration = (block.timestamp - currentStore.stakingStartTime) / SECONDS_IN_A_DAY;
             rewards = (rewardAccumulator * totalStakeDuration * currentStore.principal) / 10000;
         }
 
