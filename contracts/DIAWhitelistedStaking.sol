@@ -383,14 +383,9 @@ contract DIAWhitelistedStaking is
     /**
      * @notice Calculates the reward accumulator for a given staking store
      * @dev View function that does not update the global rewardAccumulator
-     * @param stakingStoreIndex The index of the staking store
      * @return The reward accumulator
      */
-    function _getCurrentRewardAccumulator(
-        uint256 stakingStoreIndex
-    ) internal view returns (uint256) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-
+    function _getCurrentRewardAccumulator() internal view returns (uint256) {
         uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
             SECONDS_IN_A_DAY;
         uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
@@ -413,9 +408,7 @@ contract DIAWhitelistedStaking is
             return 0;
         }
 
-        uint256 rewardAccumulator_ = _getCurrentRewardAccumulator(
-            stakingStoreIndex
-        );
+        uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
         uint256 stakerTotalRewards = (rewardAccumulator_ *
             currentStore.principal) / 10000;
 
@@ -436,9 +429,7 @@ contract DIAWhitelistedStaking is
             return 0;
         }
 
-        uint256 rewardAccumulator_ = _getCurrentRewardAccumulator(
-            stakingStoreIndex
-        );
+        uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
         uint256 stakerTotalRewards = (rewardAccumulator_ *
             currentStore.principal) / 10000;
         uint256 remainingRewards = (stakerTotalRewards -
