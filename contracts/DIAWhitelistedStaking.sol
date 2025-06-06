@@ -399,8 +399,33 @@ contract DIAWhitelistedStaking is
             SECONDS_IN_A_DAY;
         uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
         uint256 rewardAccumulator_ = rewardAccumulator + rewardsAccrued;
-        uint256 rewards = (rewardAccumulator_ * currentStore.principal) / 10000;
+        uint256 stakerTotalRewards = (rewardAccumulator_ * currentStore.principal) / 10000;
 
-        return rewards;
+        return stakerTotalRewards;
     }
+
+    /**
+     * @notice Calculates the remaining rewards for a given staking store
+     * @dev View function that does not update the rewardAccumulator
+     * @param stakingStoreIndex The index of the staking store
+     * @return The remaining rewards
+     */
+    function getRemainingRewards(
+        uint256 stakingStoreIndex
+    ) external view returns (uint256) {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        if (currentStore.lastClaimTime == currentStore.stakingStartTime) {
+            return 0;
+        }
+
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
+            SECONDS_IN_A_DAY;
+        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
+        uint256 rewardAccumulator_ = rewardAccumulator + rewardsAccrued;
+        uint256 stakerTotalRewards = (rewardAccumulator_ * currentStore.principal) / 10000;
+        uint256 remainingRewards = (stakerTotalRewards - currentStore.paidOutReward);
+
+        return remainingRewards;
+    }    
 }
