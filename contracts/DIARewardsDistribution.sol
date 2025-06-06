@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL
-
 pragma solidity 0.8.29;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "./StakingErrorsAndEvents.sol";
+
 /**
  * @title DIARewardsDistribution
  * @notice Abstract contract for managing token rewards distribution
@@ -71,7 +71,8 @@ abstract contract DIARewardsDistribution is Ownable {
         uint256 oldRewardRate = rewardRatePerDay;
         rewardRatePerDay = newRewardRate;
 
-        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
+            SECONDS_IN_A_DAY;
         uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed) / 10000;
         rewardAccumulator += rewardsAccrued;
 
