@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: GPL
-
 pragma solidity 0.8.29;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./DIAStakingCommons.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
 import "./DIARewardsDistribution.sol";
-
-import "forge-std/console2.sol";
 
 /**
  * @title DIAWhitelistedStaking
@@ -131,7 +127,7 @@ contract DIAWhitelistedStaking is
     ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        uint256 rewardToSend =_getRewardForStakingStore(stakingStoreIndex);
+        uint256 rewardToSend = _getRewardForStakingStore(stakingStoreIndex);
         currentStore.paidOutReward += rewardToSend;
 
         uint256 principalWalletReward = (rewardToSend *
@@ -147,7 +143,7 @@ contract DIAWhitelistedStaking is
             );
         }
 
-        if(beneficiaryReward > 0) {
+        if (beneficiaryReward > 0) {
             STAKING_TOKEN.safeTransferFrom(
                 rewardsWallet,
                 currentStore.beneficiary,
@@ -183,7 +179,7 @@ contract DIAWhitelistedStaking is
 
         uint256 totalRewards = _getTotalRewards(stakingStoreIndex);
 
-        if(currentStore.paidOutReward != totalRewards) {
+        if (currentStore.paidOutReward != totalRewards) {
             revert UnclaimedRewards();
         }
 
@@ -218,9 +214,7 @@ contract DIAWhitelistedStaking is
      * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
      * @custom:revert AmountExceedsStaked if amount exceeds staked principal
      */
-    function unstake(
-        uint256 stakingStoreIndex
-    ) external nonReentrant {
+    function unstake(uint256 stakingStoreIndex) external nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         if (currentStore.unstakingRequestTime == 0) {
@@ -246,7 +240,7 @@ contract DIAWhitelistedStaking is
             // Pay out principal
             STAKING_TOKEN.safeTransfer(
                 currentStore.principalPayoutWallet,
-               principalToSend
+                principalToSend
             );
         }
 
@@ -338,7 +332,7 @@ contract DIAWhitelistedStaking is
         uint256 stakerReward;
         uint256 stakerDelta;
 
-        if(success) {
+        if (success) {
             stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
             currentStore.rewardAccumulator = rewardAccumulator;
             stakerReward = (stakerDelta * currentStore.principal) / 10000;
@@ -353,7 +347,8 @@ contract DIAWhitelistedStaking is
      * @return true if the reward accumulator was updated, false otherwise
      */
     function _updateRewardAccumulator() internal returns (bool) {
-        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
+            SECONDS_IN_A_DAY;
         uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
         rewardAccumulator += rewardsAccrued;
         rewardLastUpdateTime = block.timestamp;
@@ -371,7 +366,7 @@ contract DIAWhitelistedStaking is
     ) internal returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        if(currentStore.lastClaimTime == currentStore.stakingStartTime) {
+        if (currentStore.lastClaimTime == currentStore.stakingStartTime) {
             return 0;
         }
 
@@ -381,6 +376,30 @@ contract DIAWhitelistedStaking is
         if (success) {
             rewards = (rewardAccumulator * currentStore.principal) / 10000;
         }
+
+        return rewards;
+    }
+
+    /**
+     * @notice Calculates the total rewards for a given staking store
+     * @dev View function that does not update the rewardAccumulator
+     * @param stakingStoreIndex The index of the staking store
+     * @return The total rewards accumulated
+     */
+    function getTotalRewards(
+        uint256 stakingStoreIndex
+    ) public view returns (uint256) {
+        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
+        if (currentStore.lastClaimTime == currentStore.stakingStartTime) {
+            return 0;
+        }
+
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
+            SECONDS_IN_A_DAY;
+        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
+        uint256 rewardAccumulator_ = rewardAccumulator + rewardsAccrued;
+        uint256 rewards = (rewardAccumulator_ * currentStore.principal) / 10000;
 
         return rewards;
     }
