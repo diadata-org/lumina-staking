@@ -28,7 +28,6 @@ contract WDIA is IERC20 {
     error ZeroWithdrawalAmount();
     error InsufficientBalance();
     error ZeroAddress();
-    error ZeroTransferAmount();
     error InsufficientAllowance();
     error NonEmptyCalldata();
 
@@ -75,7 +74,6 @@ contract WDIA is IERC20 {
 
     function transfer(address dst, uint wad) public returns (bool) {
         if (dst == address(0)) revert ZeroAddress();
-        if (wad == 0) revert ZeroTransferAmount();
         return transferFrom(msg.sender, dst, wad);
     }
 
@@ -86,7 +84,6 @@ contract WDIA is IERC20 {
     ) public returns (bool) {
         if (src == address(0)) revert ZeroAddress();
         if (dst == address(0)) revert ZeroAddress();
-        if (wad == 0) revert ZeroTransferAmount();
         if (balanceOf[src] < wad) revert InsufficientBalance();
 
         if (src != msg.sender && allowance[src][msg.sender] != type(uint).max) {
