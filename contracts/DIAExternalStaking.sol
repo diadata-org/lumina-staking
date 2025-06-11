@@ -144,7 +144,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     ) Ownable(msg.sender) {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
         if (_stakingLimit == 0) revert InvalidStakingLimit();
-        
+
         if (_unstakingDuration < 1 days) {
             revert UnstakingDurationTooShort();
         }
@@ -543,10 +543,6 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         );
         }
 
-        currentStore.requestedUnstakePrincipalRewardAmount = 0;
-        currentStore.requestedUnstakePrincipalAmount = 0;
-        currentStore.requestedUnstakeRewardAmount = 0;
-
         emit Claimed(
             stakingStoreIndex,
             currentStore.requestedUnstakePrincipalRewardAmount,
@@ -555,6 +551,12 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             currentStore.principalPayoutWallet,
             currentStore.beneficiary
         );
+
+        currentStore.requestedUnstakePrincipalRewardAmount = 0;
+        currentStore.requestedUnstakePrincipalAmount = 0;
+        currentStore.requestedUnstakeRewardAmount = 0;
+
+        
     }
 
     function addRewardToPool(uint256 amount) public onlyOwner {
