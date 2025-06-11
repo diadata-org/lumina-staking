@@ -522,14 +522,19 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             );
         }
 
+        if (currentStore.requestedUnstakePrincipalAmount > 0) {
+
         STAKING_TOKEN.safeTransfer(
             currentStore.principalPayoutWallet,
             currentStore.requestedUnstakePrincipalAmount
         );
+        }
+        if (currentStore.requestedUnstakeRewardAmount > 0) {
         STAKING_TOKEN.safeTransfer(
             currentStore.beneficiary,
             currentStore.requestedUnstakeRewardAmount
         );
+        }
 
         currentStore.requestedUnstakePrincipalRewardAmount = 0;
         currentStore.requestedUnstakePrincipalAmount = 0;
