@@ -144,6 +144,13 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     ) Ownable(msg.sender) {
         if (_stakingTokenAddress == address(0)) revert ZeroAddress();
         if (_stakingLimit == 0) revert InvalidStakingLimit();
+        
+        if (_unstakingDuration < 1 days) {
+            revert UnstakingDurationTooShort();
+        }
+        if (_unstakingDuration > 20 days) {
+            revert UnstakingDurationTooLong();
+        }
 
         unstakingDuration = _unstakingDuration;
         STAKING_TOKEN = IERC20(_stakingTokenAddress);
