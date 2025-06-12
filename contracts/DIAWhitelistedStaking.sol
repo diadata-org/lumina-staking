@@ -235,6 +235,7 @@ contract DIAWhitelistedStaking is
         tokensStaked -= principalToSend;
 
         currentStore.unstakingRequestTime = 0;
+        currentStore.principal = 0;
 
         if (principalToSend > 0) {
             // Pay out principal
