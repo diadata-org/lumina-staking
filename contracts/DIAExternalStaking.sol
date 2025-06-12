@@ -291,7 +291,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
     function setDailyWithdrawalThreshold(
         uint256 newThreshold
     ) external onlyOwner {
-        if (newThreshold = 0) {
+        if (newThreshold == 0) {
             revert InvalidDailyWithdrawalThreshold(newThreshold);
         }
         uint256 oldThreshold = dailyWithdrawalThreshold;
@@ -431,12 +431,15 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
      * @notice Requests unstaking, starting the waiting period
      * @param stakingStoreIndex Index of the staking store
      * @param amount Amount to unstake
+     * @param maxPoolSharesUnstakeAmount Amount of shares to maximally unstake, as slippage protection
      * @custom:revert AlreadyRequestedUnstake if unstaking was already requested
      * @custom:revert AccessDenied if caller is not beneficiary or payout wallet
+     * @custim:revert UnstakeSharesSlippageExceeded if share slippage is too high
      */
     function requestUnstake(
         uint256 stakingStoreIndex,
-        uint256 amount
+        uint256 amount,
+        uint256 maxPoolSharesUnstakeAmount
     )
         external
         nonReentrant
@@ -459,6 +462,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
 
         uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) /
             currentAmountOfPool;
+        if (poolSharesUnstakeAmount <= maxPoolSharesUnstakeAmount) {
+            revert UnstakeSharesSlippageExceeded();
+        }
         uint256 principalUnstakeAmount = (currentStore.principal * amount) /
             currentAmountOfPool;
         uint256 rewardUnstakeAmount = amount - principalUnstakeAmount;

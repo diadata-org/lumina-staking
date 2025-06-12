@@ -23,6 +23,7 @@ error NotBeneficiary();
 error InvalidStakesPerBeneficiaryLimit();
 error InvalidStakingLimit();
 error UnclaimedRewards();
+error UnstakeSharesSlippageExceeded();
 
 uint256 constant minimumStake = 1 * 10 ** 18; //   minimum stake of 1 tokens
 uint32 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
