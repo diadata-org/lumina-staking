@@ -526,7 +526,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         }
 
         currentStore.unstakingRequestTime = 0;
+         if(currentStore.principal != 0) {
         currentStore.stakingStartTime = uint64(block.timestamp);
+         }
 
         if (currentStore.requestedUnstakePrincipalRewardAmount > 0) {
             STAKING_TOKEN.safeTransfer(
@@ -634,6 +636,14 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         if (msg.sender != stakingStores[stakingStoreIndex].principalUnstaker) {
             revert NotPrincipalUnstaker();
         }
+
+          // update last state of pending
+
+        stakingStores[stakingStoreIndex]
+            .principalWalletShareBps = _getCurrentPrincipalWalletShareBps(
+            stakingStoreIndex
+        );
+
         if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
 
         pendingShareUpdates[stakingStoreIndex] = PendingShareUpdate({
