@@ -48,7 +48,9 @@ contract DIAWhitelistedStakingTest is Test {
     function setUp() public {
         // Deploy WDIA token
         wdia = new WDIA();
-        
+
+        vm.warp(block.timestamp + 1 days);
+
         // Setup accounts
         owner = makeAddr("owner");
         rewardsWallet = makeAddr("rewardsWallet");
@@ -168,6 +170,135 @@ contract DIAWhitelistedStakingTest is Test {
  
         assertEq(unstakeAmount, STAKING_AMOUNT, "Staker should receive exactly the staked amount back");
         assertEq(finalBalance, initialStakerBalance + stakerReward + STAKING_AMOUNT, "Final balance should be initial + rewards + principal");
+    }
+
+    function test_RewardsAccumulator() public {
+        // Create first stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Advance time by 7 days to accumulate rewards
+        vm.warp(block.timestamp + 7 days);
+
+        // Get initial balances for staker 1
+        uint256 initialStaker1Balance = wdia.balanceOf(staker);
+
+        // Staker 1 claims rewards on day 7
+        vm.prank(staker);
+        staking.claim(1);
+
+        // Get final balances for staker 1
+        uint256 finalStaker1Balance = wdia.balanceOf(staker);
+        uint256 totalRewardsStaker1 = (finalStaker1Balance - initialStaker1Balance);
+
+        // Expected rewards for 7 days: 1.4 tokens (20% per day * 7 days = 140%)
+        uint256 expectedRewardsStaker1 = (STAKING_AMOUNT * 14000) / 10000; // Using basis points (2000 = 20%)
+
+        // console2.log("initialStaker1Balance", initialStaker1Balance);
+        // console2.log("finalStaker1Balance", finalStaker1Balance);
+        // console2.log("totalRewardsStaker1", totalRewardsStaker1);
+        // console2.log("expectedRewardsStaker1", expectedRewardsStaker1);
+
+        assertEq(totalRewardsStaker1, expectedRewardsStaker1, "Staker 1 should receive 1.4 tokens after 7 days");
+
+        // Create a new staker and beneficiary
+        address newStaker = makeAddr("newStaker");
+        address newBeneficiary = makeAddr("newBeneficiary");
+        vm.deal(newStaker, STAKING_AMOUNT);
+
+        // Get initial balances for staker 2
+        uint256 initialStaker2Balance = wdia.balanceOf(newStaker);
+
+        // Add new staker to whitelist
+        vm.startPrank(owner);
+        staking.addWhitelistedStaker(newStaker);
+        staking.addWhitelistedStaker(newBeneficiary);
+        vm.stopPrank();
+
+        // Create second stake on day 7
+        vm.startPrank(newStaker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(newBeneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Advance time by 2 more days (to day 9)
+        vm.warp(block.timestamp + 2 days);
+
+        // Staker 2 claims rewards on day 9
+        vm.prank(newStaker);
+        staking.claim(2);
+
+        // Get final balances for staker 2
+        uint256 finalStaker2Balance = wdia.balanceOf(newStaker);
+        uint256 totalRewardsStaker2 = (finalStaker2Balance - initialStaker2Balance);
+
+        // Expected rewards for 9 days: 0.4 tokens (20% per day * 2 days = 40%)
+        uint256 expectedRewardsStaker2 = (STAKING_AMOUNT * 4000) / 10000; // Using basis points (2000 = 20%)
+        assertEq(totalRewardsStaker2, expectedRewardsStaker2, "Staker 2 should receive 0.4 tokens after 9 days");
+
+        // Advance time by 3 more days (to day 12)
+        vm.warp(block.timestamp + 3 days);
+
+        uint256 initialStaker2BalanceDay12 = wdia.balanceOf(newStaker);
+
+        // Staker 2 claims rewards on day 12
+        vm.prank(newStaker);
+        staking.claim(2);
+
+        // Get final balances for staker 2
+        
+        uint256 finalStaker2BalanceDay12 = wdia.balanceOf(newStaker);
+        uint256 totalRewardsStaker2Day12 = (finalStaker2BalanceDay12 - initialStaker2BalanceDay12);
+        console2.log("initialStaker2BalanceDay12", initialStaker2BalanceDay12);
+        console2.log("finalStaker2BalanceDay12", finalStaker2BalanceDay12);
+        console2.log("totalRewardsStaker2Day12", totalRewardsStaker2Day12);
+
+        // Expected rewards for 12 days: 0.6 tokens (20% per day * 3 days = 60%)
+        uint256 expectedRewardsStaker2Day12 = (STAKING_AMOUNT * 6000) / 10000; // Using basis points (2000 = 20%)
+        assertEq(totalRewardsStaker2Day12, expectedRewardsStaker2Day12, "Staker 2 should receive 0.6 tokens after 12 days");
+
+        // Advance time by 2 more days (to day 13)
+        vm.warp(block.timestamp + 1 days);
+        uint256 cTotalRewardsStaker2 = staking.getTotalRewards(2);
+        uint256 cTotalRemainingRewards = staking.getRemainingRewards(2);
+
+        // Log the results
+        console2.log("\nStaker 1 Results | Day 7:");
+        console2.log("Initial Balance:", formatAmount(initialStaker1Balance));
+        console2.log("Final Balance:", formatAmount(finalStaker1Balance));
+        console2.log("Total Rewards Received:", formatAmount(totalRewardsStaker1));
+        console2.log("Expected Rewards:", formatAmount(expectedRewardsStaker1));
+
+        console2.log("\nStaker 2 Results | Day 9:");
+        console2.log("Initial Balance:", formatAmount(initialStaker2Balance));
+        console2.log("Final Balance:", formatAmount(finalStaker2Balance));
+        console2.log("Total Rewards Received:", formatAmount(totalRewardsStaker2));
+        console2.log("Expected Rewards:", formatAmount(expectedRewardsStaker2));
+
+        console2.log("\nStaker 2 Results | Day 12:");
+        console2.log("Initial Balance:", formatAmount(initialStaker2BalanceDay12));
+        console2.log("Final Balance:", formatAmount(finalStaker2BalanceDay12));
+        console2.log("Total Rewards Received:", formatAmount(totalRewardsStaker2Day12));
+        console2.log("Expected Rewards:", formatAmount(expectedRewardsStaker2Day12));
+
+        console2.log("\nStaker 2 Results | Day 13:");
+        console2.log("Total Rewards Accrued:", cTotalRewardsStaker2);
+        console2.log("Remaining Rewards:", cTotalRemainingRewards);
+    }
+
+    function test_RemainingRewards() public {
+        // Create first stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        
     }
 
     function test_RewardsOverTime() public {
@@ -487,6 +618,7 @@ contract DIAWhitelistedStakingTest is Test {
             uint64 unstakingRequestTime,
             uint32 principalWalletShareBps,
             uint256 rewardAccumulator,
+            uint256 initialRewardAccumulator,
             uint64 lastClaimTime
         ) = staking.stakingStores(stakingStoreIndex);
         
@@ -517,6 +649,7 @@ contract DIAWhitelistedStakingTest is Test {
             unstakingRequestTime,
             principalWalletShareBps,
             rewardAccumulator,
+            initialRewardAccumulator,
             lastClaimTime
         ) = staking.stakingStores(stakingStoreIndex);
         
@@ -577,6 +710,7 @@ contract DIAWhitelistedStakingTest is Test {
             uint64 unstakingRequestTime,
             uint32 principalWalletShareBps,
             uint256 rewardAccumulator,
+            uint256 initialRewardAccumulator,
             uint64 lastClaimTime
         ) = staking.stakingStores(1);
         
@@ -615,6 +749,75 @@ contract DIAWhitelistedStakingTest is Test {
         // Verify stake count
         uint256 stakeCount = staking.getStakesCountForBeneficiary(beneficiary);
         assertEq(stakeCount, 2, "Beneficiary should have 2 stakes");
+    }
+
+    function test_DailyRewardsLoop() public {
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        uint256 initial = 86400;
+
+        // // Day 1
+        // uint256 day1 = initial + 1 days;
+        // vm.warp(day1);
+        // uint256 totalRewards = staking.getTotalRewards(1);
+        // console2.log("Day 1 totalRewards", totalRewards);
+
+        // // Day 2
+        // uint256 day2 = initial + 2 days;
+        // vm.warp(day2);
+        // totalRewards = staking.getTotalRewards(1);
+        // console2.log("Day 2 totalRewards", totalRewards);
+
+        // // Day 3
+        // uint256 day3 = initial + 3 days;
+        // vm.warp(day3);
+        // totalRewards = staking.getTotalRewards(1);
+        // console2.log("Day 3 totalRewards", totalRewards);
+
+        // // Day 4
+        // uint256 day4 = initial + 4 days;
+        // vm.warp(day4);
+        // totalRewards = staking.getTotalRewards(1);
+        // console2.log("Day 4 totalRewards", totalRewards);          
+
+        // Print header
+        console2.log("\nDaily Rewards Tracking");
+        console2.log("Day | Total Rewards | Remaining Rewards");
+        console2.log("----|--------------|-----------------");
+
+        // Loop through 3 days
+        for (uint256 dayCount = 1; dayCount <= 10; dayCount++) {
+            // Advance time by 1 day
+            uint256 timestamp = initial + (dayCount * 1 days);
+            vm.warp(timestamp);
+
+            // Get rewards information
+            uint256 totalRewards = staking.getTotalRewards(1);
+
+            // Claim rewards for User 1 on Day 5
+            if (dayCount == 5) {
+                vm.prank(beneficiary);
+                staking.claim(1);
+            }
+
+            uint256 remainingRewards = staking.getRemainingRewards(1);
+
+            // Print daily information
+            console2.log(
+                string.concat(
+                    vm.toString(dayCount),
+                    " |        ",
+                    formatAmount(totalRewards),
+                    " |        ",
+                    formatAmount(remainingRewards)
+                )
+            );
+        }
     }
 
  

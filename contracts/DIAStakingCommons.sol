@@ -7,7 +7,6 @@ import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./StakingErrorsAndEvents.sol";
-import "forge-std/console.sol";
 
 abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -42,6 +41,7 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         uint64 unstakingRequestTime;
         uint32 principalWalletShareBps;
         uint256 rewardAccumulator;
+        uint256 initialRewardAccumulator;
         uint64 lastClaimTime;
     }
 
@@ -122,8 +122,10 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         address sender,
         address beneficiaryAddress,
         uint256 amount,
-        uint32 principalWalletShareBps
+        uint32 principalWalletShareBps,
+        uint256 rewardAccumulator
     ) internal returns (uint256 index) {
+        
         if (principalWalletShareBps > 10000)
             revert InvalidPrincipalWalletShare();
 
@@ -150,6 +152,8 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         newStore.stakingStartTime = uint64(block.timestamp);
         newStore.principalWalletShareBps = principalWalletShareBps;
         newStore.principalUnstaker = sender;
+        newStore.rewardAccumulator = rewardAccumulator;
+        newStore.initialRewardAccumulator = rewardAccumulator;
         newStore.lastClaimTime = uint64(block.timestamp);
 
         // Track stake info

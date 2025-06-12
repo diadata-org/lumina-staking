@@ -156,7 +156,7 @@ contract DIAStakingFuzzTest is Test {
         whitelistStaking.stake(amount);
         vm.stopPrank();
 
-        (,,,uint256 principal,,,,,,) = whitelistStaking.stakingStores(1);
+        (,,,uint256 principal,,,,,,,) = whitelistStaking.stakingStores(1);
         assertEq(principal, amount, "Staked amount should match input");
     }
 

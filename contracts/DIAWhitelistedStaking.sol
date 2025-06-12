@@ -7,7 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import "./DIAStakingCommons.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./DIARewardsDistribution.sol";
-
+import "forge-std/console2.sol";
 /**
  * @title DIAWhitelistedStaking
  * @notice This contract allows whitelisted addresses to stake tokens and earn rewards.
@@ -94,11 +94,14 @@ contract DIAWhitelistedStaking is
             revert NotWhitelisted();
         }
 
+        _updateRewardAccumulator();
+
         _internalStakeForAddress(
             msg.sender,
             beneficiaryAddress,
             amount,
-            principalWalletShareBps
+            principalWalletShareBps,
+            rewardAccumulator
         );
     }
 
@@ -111,7 +114,7 @@ contract DIAWhitelistedStaking is
         if (!stakingWhitelist[msg.sender]) {
             revert NotWhitelisted();
         }
-        _internalStakeForAddress(msg.sender, msg.sender, amount, 10_000);
+        _internalStakeForAddress(msg.sender, msg.sender, amount, 10_000, rewardAccumulator);
     }
 
     /**
@@ -329,15 +332,12 @@ contract DIAWhitelistedStaking is
     ) internal returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        bool success = _updateRewardAccumulator();
-        uint256 stakerReward;
-        uint256 stakerDelta;
+        _updateRewardAccumulator();
 
-        if (success) {
-            stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
-            currentStore.rewardAccumulator = rewardAccumulator;
-            stakerReward = (stakerDelta * currentStore.principal) / 10000;
-        }
+        uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+        currentStore.rewardAccumulator += stakerDelta;
+
+        uint256 stakerReward = (stakerDelta * currentStore.principal) / 10000;
 
         return stakerReward;
     }
@@ -345,16 +345,13 @@ contract DIAWhitelistedStaking is
     /**
      * @notice Updates the reward accumulator
      * @dev Updates the reward accumulator based on the daysElapsed since rewardLastUpdateTime
-     * @return true if the reward accumulator was updated, false otherwise
      */
-    function _updateRewardAccumulator() internal returns (bool) {
+    function _updateRewardAccumulator() internal {
         uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
             SECONDS_IN_A_DAY;
         uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
         rewardAccumulator += rewardsAccrued;
         rewardLastUpdateTime = block.timestamp;
-
-        return true;
     }
 
     /**
@@ -367,18 +364,14 @@ contract DIAWhitelistedStaking is
     ) internal returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        if (currentStore.lastClaimTime == currentStore.stakingStartTime) {
-            return 0;
-        }
+        _updateRewardAccumulator();
+        uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+        uint256 currentRewardAccumulator = (stakerDelta + currentStore.rewardAccumulator) - currentStore.initialRewardAccumulator;
 
-        bool success = _updateRewardAccumulator();
-        uint256 rewards;
+        uint256 stakerTotalRewards = (currentRewardAccumulator *
+            currentStore.principal) / 10000;
 
-        if (success) {
-            rewards = (rewardAccumulator * currentStore.principal) / 10000;
-        }
-
-        return rewards;
+        return stakerTotalRewards;
     }
 
     /**
@@ -402,15 +395,14 @@ contract DIAWhitelistedStaking is
      */
     function getTotalRewards(
         uint256 stakingStoreIndex
-    ) external view returns (uint256) {
+    ) public view returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        if (currentStore.lastClaimTime == currentStore.stakingStartTime) {
-            return 0;
-        }
-
         uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
-        uint256 stakerTotalRewards = (rewardAccumulator_ *
+        uint256 stakerDelta = rewardAccumulator_ - currentStore.rewardAccumulator;
+        uint256 currentRewardAccumulator = (stakerDelta + currentStore.rewardAccumulator) - currentStore.initialRewardAccumulator;
+
+        uint256 stakerTotalRewards = (currentRewardAccumulator *
             currentStore.principal) / 10000;
 
         return stakerTotalRewards;
@@ -426,16 +418,10 @@ contract DIAWhitelistedStaking is
     ) external view returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
-        if (currentStore.lastClaimTime == currentStore.stakingStartTime) {
-            return 0;
-        }
-
         uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
-        uint256 stakerTotalRewards = (rewardAccumulator_ *
-            currentStore.principal) / 10000;
-        uint256 remainingRewards = (stakerTotalRewards -
-            currentStore.paidOutReward);
+        uint256 stakerDelta = rewardAccumulator_ - currentStore.rewardAccumulator;
+        uint256 stakerRemainingRewards = (stakerDelta * currentStore.principal) / 10000;
 
-        return remainingRewards;
+        return stakerRemainingRewards;
     }
 }
