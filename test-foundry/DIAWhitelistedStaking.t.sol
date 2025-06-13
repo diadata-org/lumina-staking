@@ -954,6 +954,130 @@ contract DIAWhitelistedStakingTest is Test {
         assertEq(actualRewards, expectedTotalRewards, "Actual rewards received should match expected total rewards");
     }
 
-    
+    function test_stakeCreation() public {
+        // Staker 1 stakes on start ofDay 2
+        uint256 day2 = 172801;
+        vm.warp(day2);
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Create a new staker and beneficiary
+        address staker2 = makeAddr("staker2");
+        address newBeneficiary = makeAddr("newBeneficiary");
+        vm.deal(staker2, STAKING_AMOUNT);
+
+        // Add new staker to whitelist
+        vm.startPrank(owner);
+        staking.addWhitelistedStaker(staker2);
+        staking.addWhitelistedStaker(newBeneficiary);
+        vm.stopPrank();     
+
+
+        // Staker 2 stakes on start of Day 3
+        uint256 day3 = day2 + 86400;
+        vm.warp(day3);
+        // Create second stake on day 2
+        vm.startPrank(staker2);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stake(STAKING_AMOUNT); // 100% to principal wallet
+        vm.stopPrank();
+
+        uint256 initialStaker1Balance = wdia.balanceOf(staker);
+        uint256 initialStaker2Balance = wdia.balanceOf(staker2);
+
+        // Stakers claim on start of Day 4
+        uint256 day4 = day3 + 86400;
+        vm.warp(day4);
+        vm.prank(beneficiary);
+        staking.claim(1);
+
+        vm.prank(staker2);
+        staking.claim(2);
+        
+        uint256 finalStaker1Balance = wdia.balanceOf(staker);
+        uint256 finalStaker2Balance = wdia.balanceOf(staker2);
+
+        uint256 staker1Rewards = finalStaker1Balance - initialStaker1Balance;
+        uint256 staker2Rewards = finalStaker2Balance - initialStaker2Balance;   
+        
+        console2.log("Staker 1 rewards:", formatAmount(staker1Rewards));
+        console2.log("Staker 2 rewards:", formatAmount(staker2Rewards));
+        
+        uint256 staker1ExpectedRewards = (STAKING_AMOUNT * 4000) / 10000;
+        uint256 staker2ExpectedRewards = (STAKING_AMOUNT * 2000) / 10000; 
+
+        console2.log("\nRewards Comparison Test Results:");
+        console2.log("Staker 1 (stakeForAddress):");
+        console2.log("- Rewards Received:", formatAmount(staker1Rewards));
+        console2.log("- Expected Rewards:", formatAmount(staker1ExpectedRewards));
+
+        console2.log("\nStaker 2 (stake):");
+        console2.log("- Rewards Received:", formatAmount(staker2Rewards));
+        console2.log("- Expected Rewards:", formatAmount(staker2ExpectedRewards));
+
+        // Verify rewards
+        assertEq(staker1Rewards, staker1ExpectedRewards, "Staker 1 should receive correct rewards");
+        assertEq(staker2Rewards, staker2ExpectedRewards, "Staker 2 should receive correct rewards");                                            
+    }
+
+    function test_RewardAccumulatorBehavior() public {
+        // Setup initial stake with stakeForAddress
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Advance time by 1 day
+        vm.warp(block.timestamp + 1 days);
+
+        // Get reward accumulator after first stake
+        uint256 rewardAccumulatorAfterFirstStake = staking.rewardAccumulator();
+
+        // Create second stake using stake()
+        address staker2 = makeAddr("staker2");
+        vm.deal(staker2, STAKING_AMOUNT);
+
+        vm.startPrank(owner);
+        staking.addWhitelistedStaker(staker2);
+        vm.stopPrank();
+
+        vm.startPrank(staker2);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stake(STAKING_AMOUNT);
+        vm.stopPrank();
+
+        // Get reward accumulator after second stake
+        uint256 rewardAccumulatorAfterSecondStake = staking.rewardAccumulator();
+
+        // Advance time by 1 more day
+        vm.warp(block.timestamp + 1 days);
+
+        // Get rewards for both stakes
+        uint256 staker1Rewards = staking.getTotalRewards(1);
+        uint256 staker2Rewards = staking.getTotalRewards(2);
+
+        // Log results
+        console2.log("\nReward Accumulator Test Results:");
+        console2.log("Reward Accumulator after first stake (stakeForAddress):", formatAmount(rewardAccumulatorAfterFirstStake));
+        console2.log("Reward Accumulator after second stake (stake):", formatAmount(rewardAccumulatorAfterSecondStake));
+        console2.log("\nRewards after 2 days:");
+        console2.log("Staker 1 (stakeForAddress) rewards:", formatAmount(staker1Rewards));
+        console2.log("Staker 2 (stake) rewards:", formatAmount(staker2Rewards));
+
+        // Expected rewards for 2 days: 40% of staked amount
+        uint256 expectedRewards = (STAKING_AMOUNT * 4000) / 10000; // 40% of staked amount
+
+        // Verify rewards
+        assertEq(staker1Rewards, expectedRewards, "Staker 1 should receive correct rewards");
+        assertEq(staker2Rewards, expectedRewards, "Staker 2 should receive correct rewards");
+        assertEq(rewardAccumulatorAfterFirstStake, rewardAccumulatorAfterSecondStake, "Reward accumulator should be the same for both stakes");
+    }
     
 } 

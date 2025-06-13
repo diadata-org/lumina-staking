@@ -7,7 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import "./DIAStakingCommons.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./DIARewardsDistribution.sol";
-import "forge-std/console2.sol";
+
 /**
  * @title DIAWhitelistedStaking
  * @notice This contract allows whitelisted addresses to stake tokens and earn rewards.
@@ -114,7 +114,16 @@ contract DIAWhitelistedStaking is
         if (!stakingWhitelist[msg.sender]) {
             revert NotWhitelisted();
         }
-        _internalStakeForAddress(msg.sender, msg.sender, amount, 10_000, rewardAccumulator);
+        
+        _updateRewardAccumulator();
+
+        _internalStakeForAddress(
+            msg.sender,
+            msg.sender,
+            amount,
+            10_000,
+            rewardAccumulator
+        );
     }
 
     /**
@@ -334,7 +343,8 @@ contract DIAWhitelistedStaking is
 
         _updateRewardAccumulator();
 
-        uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
+        uint256 stakerDelta = rewardAccumulator -
+            currentStore.rewardAccumulator;
         currentStore.rewardAccumulator += stakerDelta;
 
         uint256 stakerReward = (stakerDelta * currentStore.principal) / 10000;
@@ -369,8 +379,11 @@ contract DIAWhitelistedStaking is
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         _updateRewardAccumulator();
-        uint256 stakerDelta = rewardAccumulator - currentStore.rewardAccumulator;
-        uint256 currentRewardAccumulator = (stakerDelta + currentStore.rewardAccumulator) - currentStore.initialRewardAccumulator;
+        uint256 stakerDelta = rewardAccumulator -
+            currentStore.rewardAccumulator;
+        uint256 currentRewardAccumulator = (stakerDelta +
+            currentStore.rewardAccumulator) -
+            currentStore.initialRewardAccumulator;
 
         uint256 stakerTotalRewards = (currentRewardAccumulator *
             currentStore.principal) / 10000;
@@ -403,8 +416,11 @@ contract DIAWhitelistedStaking is
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
-        uint256 stakerDelta = rewardAccumulator_ - currentStore.rewardAccumulator;
-        uint256 currentRewardAccumulator = (stakerDelta + currentStore.rewardAccumulator) - currentStore.initialRewardAccumulator;
+        uint256 stakerDelta = rewardAccumulator_ -
+            currentStore.rewardAccumulator;
+        uint256 currentRewardAccumulator = (stakerDelta +
+            currentStore.rewardAccumulator) -
+            currentStore.initialRewardAccumulator;
 
         uint256 stakerTotalRewards = (currentRewardAccumulator *
             currentStore.principal) / 10000;
@@ -423,8 +439,10 @@ contract DIAWhitelistedStaking is
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
 
         uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
-        uint256 stakerDelta = rewardAccumulator_ - currentStore.rewardAccumulator;
-        uint256 stakerRemainingRewards = (stakerDelta * currentStore.principal) / 10000;
+        uint256 stakerDelta = rewardAccumulator_ -
+            currentStore.rewardAccumulator;
+        uint256 stakerRemainingRewards = (stakerDelta *
+            currentStore.principal) / 10000;
 
         return stakerRemainingRewards;
     }

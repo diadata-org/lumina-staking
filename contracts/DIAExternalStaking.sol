@@ -526,9 +526,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         }
 
         currentStore.unstakingRequestTime = 0;
-         if(currentStore.principal != 0) {
-        currentStore.stakingStartTime = uint64(block.timestamp);
-         }
+        if (currentStore.principal != 0) {
+            currentStore.stakingStartTime = uint64(block.timestamp);
+        }
 
         if (currentStore.requestedUnstakePrincipalRewardAmount > 0) {
             STAKING_TOKEN.safeTransfer(
@@ -538,17 +538,16 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         }
 
         if (currentStore.requestedUnstakePrincipalAmount > 0) {
-
-        STAKING_TOKEN.safeTransfer(
-            currentStore.principalPayoutWallet,
-            currentStore.requestedUnstakePrincipalAmount
-        );
+            STAKING_TOKEN.safeTransfer(
+                currentStore.principalPayoutWallet,
+                currentStore.requestedUnstakePrincipalAmount
+            );
         }
         if (currentStore.requestedUnstakeRewardAmount > 0) {
-        STAKING_TOKEN.safeTransfer(
-            currentStore.beneficiary,
-            currentStore.requestedUnstakeRewardAmount
-        );
+            STAKING_TOKEN.safeTransfer(
+                currentStore.beneficiary,
+                currentStore.requestedUnstakeRewardAmount
+            );
         }
 
         emit Claimed(
@@ -563,8 +562,6 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         currentStore.requestedUnstakePrincipalRewardAmount = 0;
         currentStore.requestedUnstakePrincipalAmount = 0;
         currentStore.requestedUnstakeRewardAmount = 0;
-
-        
     }
 
     function addRewardToPool(uint256 amount) public onlyOwner {
@@ -637,7 +634,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
             revert NotPrincipalUnstaker();
         }
 
-          // update last state of pending
+        // update last state of pending
 
         stakingStores[stakingStoreIndex]
             .principalWalletShareBps = _getCurrentPrincipalWalletShareBps(

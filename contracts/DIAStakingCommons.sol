@@ -125,7 +125,6 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         uint32 principalWalletShareBps,
         uint256 rewardAccumulator
     ) internal returns (uint256 index) {
-        
         if (principalWalletShareBps > 10000)
             revert InvalidPrincipalWalletShare();
 
