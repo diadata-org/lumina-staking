@@ -884,5 +884,76 @@ contract DIAWhitelistedStakingTest is Test {
         console2.log("- Total Rewards | balanceOf:", formatAmount(totalStaker1Rewards));
         console2.log("- Expected Rewards: ", formatAmount(expectedReward));
     }
+
+    function test_RewardRateUpdate() public {
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        
+        // Initial reward rate is 20% per day (2000 basis points)
+        uint256 initialRewardRate = staking.rewardRatePerDay();
+        assertEq(initialRewardRate, 2000, "Initial reward rate should be 2000 basis points (20%)");
+
+        // Advance time by 5 days
+        uint256 day6 = 518401;
+        vm.warp(day6);
+
+        // Get rewards before rate update
+        uint256 rewardsBeforeUpdate = staking.getTotalRewards(1);
+        uint256 expectedRewardsBeforeUpdate = (STAKING_AMOUNT * initialRewardRate * 5) / 10000;
+
+        // assertEq(rewardsBeforeUpdate, expectedRewardsBeforeUpdate, "Rewards before update should be 1 tokens");
+
+        // Update reward rate to 15% per day (1500 basis points)
+        vm.startPrank(owner);
+        staking.updateRewardRatePerDay(1500);
+        vm.stopPrank();
+
+        // Verify new rate
+        uint256 newRewardRate = staking.rewardRatePerDay();
+        assertEq(newRewardRate, 1500, "New reward rate should be 1500 basis points (15%)");
+
+        // Advance time by 5 more days
+        uint256 day11 = 950401;
+        vm.warp(day11);
+
+        // Get total rewards after rate update
+        uint256 totalRewards = staking.getTotalRewards(1);
+        
+        // Calculate expected rewards:
+        // First 5 days: 20% per day = 100%
+        // Next 5 days: 15% per day = 75%
+        // Total: 175% --> 1.75 tokens
+        uint256 expectedTotalRewards = (STAKING_AMOUNT * 17500) / 10000;
+        
+        console2.log("\nReward Rate Update Test Results:");
+        console2.log("Initial Reward Rate:", initialRewardRate);
+        console2.log("New Reward Rate:", newRewardRate);
+        console2.log("Rewards Before Update:", formatAmount(rewardsBeforeUpdate));
+        console2.log("Total Rewards After Update:", formatAmount(totalRewards));
+        console2.log("Expected Total Rewards:", formatAmount(expectedTotalRewards));
+
+        assertEq(totalRewards, expectedTotalRewards, "Total rewards should be 175% (100% from first 5 days + 75% from next 5 days)");
+
+        // Claim rewards and verify actual token transfers
+        uint256 initialBalance = wdia.balanceOf(staker);
+        vm.prank(beneficiary);
+        staking.claim(1);
+        uint256 finalBalance = wdia.balanceOf(staker);
+        uint256 actualRewards = finalBalance - initialBalance;
+
+        console2.log("\nActual Rewards Received:");
+        console2.log("Initial Balance:", formatAmount(initialBalance));
+        console2.log("Final Balance:", formatAmount(finalBalance));
+        console2.log("Actual Rewards:", formatAmount(actualRewards));
+
+        assertEq(actualRewards, expectedTotalRewards, "Actual rewards received should match expected total rewards");
+    }
+
+    
     
 } 

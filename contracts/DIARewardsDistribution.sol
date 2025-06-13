@@ -69,13 +69,11 @@ abstract contract DIARewardsDistribution is Ownable {
         }
 
         uint256 oldRewardRate = rewardRatePerDay;
-        rewardRatePerDay = newRewardRate;
-
-        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
-            SECONDS_IN_A_DAY;
-        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed) / 10000;
+        rewardRatePerDay = newRewardRate;        
+        
+        uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) / SECONDS_IN_A_DAY;
+        uint256 rewardsAccrued = (oldRewardRate * daysElapsed);
         rewardAccumulator += rewardsAccrued;
-
         rewardLastUpdateTime = block.timestamp;
 
         emit RewardRateUpdated(oldRewardRate, newRewardRate);
