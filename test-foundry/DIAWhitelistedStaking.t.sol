@@ -197,11 +197,6 @@ contract DIAWhitelistedStakingTest is Test {
         // Expected rewards for 7 days: 1.4 tokens (20% per day * 7 days = 140%)
         uint256 expectedRewardsStaker1 = (STAKING_AMOUNT * 14000) / 10000; // Using basis points (2000 = 20%)
 
-        // console2.log("initialStaker1Balance", initialStaker1Balance);
-        // console2.log("finalStaker1Balance", finalStaker1Balance);
-        // console2.log("totalRewardsStaker1", totalRewardsStaker1);
-        // console2.log("expectedRewardsStaker1", expectedRewardsStaker1);
-
         assertEq(totalRewardsStaker1, expectedRewardsStaker1, "Staker 1 should receive 1.4 tokens after 7 days");
 
         // Create a new staker and beneficiary
@@ -788,10 +783,10 @@ contract DIAWhitelistedStakingTest is Test {
         // Print header
         console2.log("\nDaily Rewards Tracking");
         console2.log("Day | Total Rewards | Remaining Rewards");
-        console2.log("----|--------------|-----------------");
+        console2.log("----|---------------|-----------------");
 
         // Loop through 3 days
-        for (uint256 dayCount = 1; dayCount <= 10; dayCount++) {
+        for (uint256 dayCount = 1; dayCount <= 20; dayCount++) {
             // Advance time by 1 day
             uint256 timestamp = initial + (dayCount * 1 days);
             vm.warp(timestamp);
@@ -805,13 +800,19 @@ contract DIAWhitelistedStakingTest is Test {
                 staking.claim(1);
             }
 
+            // Claim rewards for User 1 on Day 5
+            if (dayCount == 9) {
+                vm.prank(beneficiary);
+                staking.claim(1);
+            }
+
             uint256 remainingRewards = staking.getRemainingRewards(1);
 
             // Print daily information
             console2.log(
                 string.concat(
                     vm.toString(dayCount),
-                    " |        ",
+                    " |          ",
                     formatAmount(totalRewards),
                     " |        ",
                     formatAmount(remainingRewards)
@@ -820,8 +821,68 @@ contract DIAWhitelistedStakingTest is Test {
         }
     }
 
- 
+    function test_SpamClaim() public {
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
 
- 
+        // Advance time by 7 days to accumulate rewards => rewards = 1.4 tokens
+        vm.warp(block.timestamp + 7 days);
+
+        // Get initial balances for staker 2
+        uint256 initialStaker1Balance = wdia.balanceOf(staker);
+
+        // Create a new staker and beneficiary
+        address newStaker = makeAddr("newStaker");
+        address newBeneficiary = makeAddr("newBeneficiary");
+        vm.deal(newStaker, STAKING_AMOUNT);
+
+        // Get initial balances for staker 2
+        uint256 initialStaker2Balance = wdia.balanceOf(newStaker);
+
+        // Add new staker to whitelist
+        vm.startPrank(owner);
+        staking.addWhitelistedStaker(newStaker);
+        staking.addWhitelistedStaker(newBeneficiary);
+        vm.stopPrank();               
+
+        // Create second stake on day 7
+        vm.startPrank(newStaker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(newBeneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Attacker repeatedly calls claim() within the same day - start of day 8
+        uint256 initialTimestamp = 691201;
+        for (uint256 hourCount = 1; hourCount <= 10; hourCount++) {
+            vm.warp(initialTimestamp + (hourCount * 1 hours)); // advance by 1 hour
+            vm.prank(newBeneficiary);
+            staking.claim(2); // attacker stake index is 2
+        }
+
+        // After 1 day, Staker A tries to claim - start of day 9
+        // Staker 1 rewards = 1.6 tokens
+        vm.warp(block.timestamp + (1 days - 10 hours)); // complete the day
+        vm.prank(staker);
+        staking.claim(1);
+
+        uint256 staker1Rewards = staking.getTotalRewards(1);
+        // OR
+        uint256 finalStaker1Balance = wdia.balanceOf(staker);
+        uint256 totalStaker1Rewards = finalStaker1Balance - initialStaker1Balance;
+        
+        uint256 expectedReward = (STAKING_AMOUNT * 16000) / 10000;
+
+        assertEq(staker1Rewards, expectedReward, "Staker 1 rewards should be 1.6 tokens");
+
+        console2.log("\nSummary:");
+        console2.log("Staker 1 :");
+        console2.log("- Total Rewards | getTotalRewards:", formatAmount(staker1Rewards));
+        console2.log("- Total Rewards | balanceOf:", formatAmount(totalStaker1Rewards));
+        console2.log("- Expected Rewards: ", formatAmount(expectedReward));
+    }
     
 } 

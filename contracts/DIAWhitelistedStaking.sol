@@ -345,13 +345,17 @@ contract DIAWhitelistedStaking is
     /**
      * @notice Updates the reward accumulator
      * @dev Updates the reward accumulator based on the daysElapsed since rewardLastUpdateTime
+     * @dev Only updates if at least one full day has elapsed
      */
     function _updateRewardAccumulator() internal {
         uint256 daysElapsed = (block.timestamp - rewardLastUpdateTime) /
             SECONDS_IN_A_DAY;
-        uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
-        rewardAccumulator += rewardsAccrued;
-        rewardLastUpdateTime = block.timestamp;
+
+        if (daysElapsed > 0) {
+            uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
+            rewardAccumulator += rewardsAccrued;
+            rewardLastUpdateTime = block.timestamp;
+        }
     }
 
     /**

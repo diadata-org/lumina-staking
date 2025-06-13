@@ -432,9 +432,9 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
      * @param stakingStoreIndex Index of the staking store
      * @param amount Amount to unstake
      * @param maxPoolSharesUnstakeAmount Amount of shares to maximally unstake, as slippage protection
-     * @custom:revert AlreadyRequestedUnstake if unstaking was already requested
-     * @custom:revert AccessDenied if caller is not beneficiary or payout wallet
-     * @custim:revert UnstakeSharesSlippageExceeded if share slippage is too high
+     * @dev revert AlreadyRequestedUnstake if unstaking was already requested
+     * @dev revert AccessDenied if caller is not beneficiary or payout wallet
+     * @dev revert UnstakeSharesSlippageExceeded if share slippage is too high
      */
     function requestUnstake(
         uint256 stakingStoreIndex,
