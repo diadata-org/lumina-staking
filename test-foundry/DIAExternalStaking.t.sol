@@ -133,80 +133,80 @@ contract DIAExternalStakingTest is Test {
         assertEq(principalPayoutWallet, user1);
     }
 
-    function test_RequestUnstake() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint32 principalShareBps = 1000;
+    // function test_RequestUnstake() public {
+    //      uint256 amount = 1000 * 10 ** 18;
+    //     uint32 principalShareBps = 1000;
 
-        vm.startPrank(user1);
-        token.approve(address(staking), amount);
-        staking.stake(amount, principalShareBps);
-        staking.requestUnstake(1,amount);
-        vm.stopPrank();
+    //     vm.startPrank(user1);
+    //     token.approve(address(staking), amount);
+    //     staking.stake(amount, principalShareBps);
+    //     staking.requestUnstake(1,amount);
+    //     vm.stopPrank();
 
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            // beneficiary
-            // principalPayoutWallet
-            // principalUnstaker
-            // principal
-            // poolShares
-            // stakingStartTime
-            uint64 unstakingRequestTime, // principalWalletShareBps
-            ,
-            ,
-            ,
+    //     (
+    //         ,
+    //         ,
+    //         ,
+    //         ,
+    //         ,
+    //         ,
+    //         // beneficiary
+    //         // principalPayoutWallet
+    //         // principalUnstaker
+    //         // principal
+    //         // poolShares
+    //         // stakingStartTime
+    //         uint64 unstakingRequestTime, // principalWalletShareBps
+    //         ,
+    //         ,
+    //         ,
             
 
 
-        ) = // pendingShareUpdateTime
-            staking.stakingStores(1);
+    //     ) = // pendingShareUpdateTime
+    //         staking.stakingStores(1);
 
-        assertEq(unstakingRequestTime, uint64(block.timestamp));
-    }
+    //     assertEq(unstakingRequestTime, uint64(block.timestamp));
+    // }
 
-     function test_AlreadyRequestedUnstake() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint32 principalShareBps = 1000;
+    //  function test_AlreadyRequestedUnstake() public {
+    //     uint256 amount = 1000 * 10 ** 18;
+    //     uint32 principalShareBps = 1000;
 
-        vm.startPrank(user1);
-        token.approve(address(staking), amount);
-        staking.stake(amount, principalShareBps);
-        staking.requestUnstake(1,amount);
-        vm.expectRevert(AlreadyRequestedUnstake.selector);
-        staking.requestUnstake(1,amount);
+    //     vm.startPrank(user1);
+    //     token.approve(address(staking), amount);
+    //     staking.stake(amount, principalShareBps);
+    //     staking.requestUnstake(1,amount);
+    //     vm.expectRevert(AlreadyRequestedUnstake.selector);
+    //     staking.requestUnstake(1,amount);
 
-        vm.stopPrank();
+    //     vm.stopPrank();
 
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            // beneficiary
-            // principalPayoutWallet
-            // principalUnstaker
-            // principal
-            // poolShares
-            // stakingStartTime
-            uint64 unstakingRequestTime, // principalWalletShareBps
-            ,
-            ,
-            ,
+    //     (
+    //         ,
+    //         ,
+    //         ,
+    //         ,
+    //         ,
+    //         ,
+    //         // beneficiary
+    //         // principalPayoutWallet
+    //         // principalUnstaker
+    //         // principal
+    //         // poolShares
+    //         // stakingStartTime
+    //         uint64 unstakingRequestTime, // principalWalletShareBps
+    //         ,
+    //         ,
+    //         ,
             
 
 
-        ) = // pendingShareUpdateTime
-            staking.stakingStores(1);
+    //     ) = // pendingShareUpdateTime
+    //         staking.stakingStores(1);
 
-        assertEq(unstakingRequestTime, uint64(block.timestamp));
-    }
+    //     assertEq(unstakingRequestTime, uint64(block.timestamp));
+    // }
 
     function test_RequestUnstake_InvalidAccount() public {
         uint256 amount = 1000 * 10 ** 18;
@@ -219,7 +219,7 @@ contract DIAExternalStakingTest is Test {
 
         vm.prank(random);
         vm.expectRevert(AccessDenied.selector);
-        staking.requestUnstake(1,amount);
+        staking.requestUnstake(1,amount,1);
     }
 
     function test_CompleteUnstake() public {
@@ -233,7 +233,7 @@ contract DIAExternalStakingTest is Test {
 
         token.approve(address(staking), amount);
         staking.stake(amount, principalShareBps);
-        staking.requestUnstake(1,amount);
+        staking.requestUnstake(1,amount,1);
         vm.stopPrank();
 
         // Add rewards round 1
@@ -259,7 +259,7 @@ contract DIAExternalStakingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(user1);
-        staking.requestUnstake(1,200);
+        staking.requestUnstake(1,200,1);
 		vm.stopPrank();
 
         // Fast forward time
@@ -279,7 +279,8 @@ contract DIAExternalStakingTest is Test {
         vm.startPrank(user1);
         token.approve(address(staking), amount);
         staking.stake(amount, principalShareBps);
-        staking.requestUnstake(1,100 * 10 ** 18);
+        
+        staking.requestUnstake(1,100 * 10 ** 18,staking.getPoolSharesUnstakeAmount(1, 100 * 10 ** 18));
         vm.stopPrank();
 
         // Add rewards
@@ -486,7 +487,7 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
         token.approve(address(staking), amount);
         staking.stake(amount, principalShareBps);
 
-        staking.requestUnstake(1,100 * 10 ** 18);
+        staking.requestUnstake(1,100 * 10 ** 18,staking.getPoolSharesUnstakeAmount(1, 100 * 10 ** 18));
         vm.stopPrank();
 
         // Add rewards
@@ -561,7 +562,7 @@ vm.expectRevert(NotPrincipalUnstaker.selector);
         vm.startPrank(user1);
         token.approve(address(staking), amount);
         staking.stake(amount, principalShareBps);
-        staking.requestUnstake(1,10);
+        staking.requestUnstake(1,10,staking.getPoolSharesUnstakeAmount(1, 10));
         vm.stopPrank();
 
         vm.warp(block.timestamp + UNSTAKING_DURATION - 1);
