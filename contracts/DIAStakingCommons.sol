@@ -42,6 +42,8 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         uint32 principalWalletShareBps;
         uint256 rewardAccumulator;
         uint256 initialRewardAccumulator;
+        uint256 pendingRewards;
+        bool isClaimable;
         uint64 lastClaimTime;
     }
 
@@ -153,6 +155,8 @@ abstract contract DIAStakingCommons is Ownable, ReentrancyGuard {
         newStore.principalUnstaker = sender;
         newStore.rewardAccumulator = rewardAccumulator;
         newStore.initialRewardAccumulator = rewardAccumulator;
+        newStore.pendingRewards = 0;
+        newStore.isClaimable = true;
         newStore.lastClaimTime = uint64(block.timestamp);
 
         // Track stake info

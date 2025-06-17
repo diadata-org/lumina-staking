@@ -114,7 +114,7 @@ contract DIAWhitelistedStaking is
         if (!stakingWhitelist[msg.sender]) {
             revert NotWhitelisted();
         }
-        
+
         _updateRewardAccumulator();
 
         _internalStakeForAddress(
@@ -138,8 +138,19 @@ contract DIAWhitelistedStaking is
         uint256 stakingStoreIndex
     ) external onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) nonReentrant {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        uint256 rewardToSend;
 
-        uint256 rewardToSend = _getRewardForStakingStore(stakingStoreIndex);
+        if (currentStore.pendingRewards != 0) {
+            rewardToSend = currentStore.pendingRewards;
+            currentStore.isClaimable = false;
+        } else if (
+            currentStore.pendingRewards == 0 && !currentStore.isClaimable
+        ) {
+            rewardToSend = 0;
+        } else {
+            rewardToSend = _getRewardForStakingStore(stakingStoreIndex);
+        }
+
         currentStore.paidOutReward += rewardToSend;
 
         uint256 principalWalletReward = (rewardToSend *
@@ -163,6 +174,7 @@ contract DIAWhitelistedStaking is
             );
         }
 
+        currentStore.pendingRewards = 0;
         currentStore.lastClaimTime = uint64(block.timestamp);
 
         emit Claimed(
@@ -184,33 +196,15 @@ contract DIAWhitelistedStaking is
         uint256 stakingStoreIndex
     ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
         }
 
-        uint256 totalRewards = _getTotalRewards(stakingStoreIndex);
-
-        if (currentStore.paidOutReward != totalRewards) {
-            revert UnclaimedRewards();
-        }
-
-        currentStore.unstakingRequestTime = uint64(block.timestamp);
-        emit UnstakeRequested(msg.sender, stakingStoreIndex);
-    }
-
-    /**
-     * @notice Unstakes the principal amount immediately
-     * @dev Can only be called by the beneficiary.
-     * @param stakingStoreIndex Index of the staking store.
-     */
-    function requestUnstakeWithoutClaim(
-        uint256 stakingStoreIndex
-    ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-
-        if (currentStore.unstakingRequestTime != 0) {
-            revert AlreadyRequestedUnstake();
+        if (currentStore.pendingRewards == 0 && currentStore.isClaimable) {
+            uint256 pendingRewards = _getRewardForStakingStore(
+                stakingStoreIndex
+            );
+            currentStore.pendingRewards = pendingRewards;
         }
 
         currentStore.unstakingRequestTime = uint64(block.timestamp);
@@ -364,31 +358,8 @@ contract DIAWhitelistedStaking is
         if (daysElapsed > 0) {
             uint256 rewardsAccrued = (rewardRatePerDay * daysElapsed);
             rewardAccumulator += rewardsAccrued;
-            rewardLastUpdateTime = block.timestamp;
+            rewardLastUpdateTime += SECONDS_IN_A_DAY * daysElapsed;
         }
-    }
-
-    /**
-     * @notice Calculates the total rewards for a given staking store
-     * @param stakingStoreIndex The index of the staking store
-     * @return The total rewards accumulated
-     */
-    function _getTotalRewards(
-        uint256 stakingStoreIndex
-    ) internal returns (uint256) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-
-        _updateRewardAccumulator();
-        uint256 stakerDelta = rewardAccumulator -
-            currentStore.rewardAccumulator;
-        uint256 currentRewardAccumulator = (stakerDelta +
-            currentStore.rewardAccumulator) -
-            currentStore.initialRewardAccumulator;
-
-        uint256 stakerTotalRewards = (currentRewardAccumulator *
-            currentStore.principal) / 10000;
-
-        return stakerTotalRewards;
     }
 
     /**
@@ -414,16 +385,29 @@ contract DIAWhitelistedStaking is
         uint256 stakingStoreIndex
     ) public view returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        uint256 stakerTotalRewards;
 
-        uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
-        uint256 stakerDelta = rewardAccumulator_ -
-            currentStore.rewardAccumulator;
-        uint256 currentRewardAccumulator = (stakerDelta +
-            currentStore.rewardAccumulator) -
-            currentStore.initialRewardAccumulator;
+        if (currentStore.pendingRewards != 0 || currentStore.unstakingRequestTime != 0) {
+            stakerTotalRewards =
+                currentStore.paidOutReward +
+                currentStore.pendingRewards;
+        } else if (
+            (currentStore.pendingRewards == 0 && !currentStore.isClaimable)
+        ) {
+            stakerTotalRewards = currentStore.paidOutReward;
+        } else {
+            uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
 
-        uint256 stakerTotalRewards = (currentRewardAccumulator *
-            currentStore.principal) / 10000;
+            uint256 stakerDelta = rewardAccumulator_ -
+                currentStore.rewardAccumulator;
+            uint256 currentRewardAccumulator = (stakerDelta +
+                currentStore.rewardAccumulator) -
+                currentStore.initialRewardAccumulator;
+
+            stakerTotalRewards =
+                (currentRewardAccumulator * currentStore.principal) /
+                10000;
+        }
 
         return stakerTotalRewards;
     }
@@ -437,12 +421,23 @@ contract DIAWhitelistedStaking is
         uint256 stakingStoreIndex
     ) external view returns (uint256) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+        uint256 stakerRemainingRewards;
 
-        uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
-        uint256 stakerDelta = rewardAccumulator_ -
-            currentStore.rewardAccumulator;
-        uint256 stakerRemainingRewards = (stakerDelta *
-            currentStore.principal) / 10000;
+        if (currentStore.pendingRewards != 0 || currentStore.unstakingRequestTime != 0) {
+            stakerRemainingRewards = currentStore.pendingRewards;
+        } else if (
+            currentStore.pendingRewards == 0 && !currentStore.isClaimable
+        ) {
+            stakerRemainingRewards = 0;
+        } else {
+            uint256 rewardAccumulator_ = _getCurrentRewardAccumulator();
+
+            uint256 stakerDelta = rewardAccumulator_ -
+                currentStore.rewardAccumulator;
+            stakerRemainingRewards =
+                (stakerDelta * currentStore.principal) /
+                10000;
+        }
 
         return stakerRemainingRewards;
     }

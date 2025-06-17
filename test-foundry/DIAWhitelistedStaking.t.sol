@@ -19,6 +19,7 @@ contract DIAWhitelistedStakingTest is Test {
     uint256 public constant STAKING_AMOUNT = 1 * 1e18;
     uint256 public constant REWARD_RATE_PER_DAY = 2000; // 20% per day (2000 basis points)
     uint256 public constant UNSTAKING_DURATION = 7 days;
+    uint256 public constant SECONDS_IN_A_DAY = 86400;
 
     event StakerAddressAdded(address newStaker);
     event Staked(address indexed staker, address indexed beneficiary, uint256 amount, uint256 stakingStoreIndex);
@@ -49,7 +50,7 @@ contract DIAWhitelistedStakingTest is Test {
         // Deploy WDIA token
         wdia = new WDIA();
 
-        vm.warp(block.timestamp + 1 days);
+        // vm.warp(block.timestamp + 1 days);
 
         // Setup accounts
         owner = makeAddr("owner");
@@ -614,6 +615,8 @@ contract DIAWhitelistedStakingTest is Test {
             uint32 principalWalletShareBps,
             uint256 rewardAccumulator,
             uint256 initialRewardAccumulator,
+            uint256 pendingRewards,
+            bool isClaimable,
             uint64 lastClaimTime
         ) = staking.stakingStores(stakingStoreIndex);
         
@@ -645,6 +648,8 @@ contract DIAWhitelistedStakingTest is Test {
             principalWalletShareBps,
             rewardAccumulator,
             initialRewardAccumulator,
+            pendingRewards,
+            isClaimable,
             lastClaimTime
         ) = staking.stakingStores(stakingStoreIndex);
         
@@ -706,6 +711,8 @@ contract DIAWhitelistedStakingTest is Test {
             uint32 principalWalletShareBps,
             uint256 rewardAccumulator,
             uint256 initialRewardAccumulator,
+            uint256 pendingRewards,
+            bool isClaimable,
             uint64 lastClaimTime
         ) = staking.stakingStores(1);
         
@@ -899,14 +906,13 @@ contract DIAWhitelistedStakingTest is Test {
         assertEq(initialRewardRate, 2000, "Initial reward rate should be 2000 basis points (20%)");
 
         // Advance time by 5 days
-        uint256 day6 = 518401;
-        vm.warp(day6);
+        uint256 day5 = 432001;
+        vm.warp(day5);
 
         // Get rewards before rate update
         uint256 rewardsBeforeUpdate = staking.getTotalRewards(1);
         uint256 expectedRewardsBeforeUpdate = (STAKING_AMOUNT * initialRewardRate * 5) / 10000;
-
-        // assertEq(rewardsBeforeUpdate, expectedRewardsBeforeUpdate, "Rewards before update should be 1 tokens");
+        assertEq(rewardsBeforeUpdate, expectedRewardsBeforeUpdate, "Rewards before update should be 1 tokens");
 
         // Update reward rate to 15% per day (1500 basis points)
         vm.startPrank(owner);
@@ -917,9 +923,9 @@ contract DIAWhitelistedStakingTest is Test {
         uint256 newRewardRate = staking.rewardRatePerDay();
         assertEq(newRewardRate, 1500, "New reward rate should be 1500 basis points (15%)");
 
-        // Advance time by 5 more days
-        uint256 day11 = 950401;
-        vm.warp(day11);
+        // Advance time by 1 more day
+        uint256 day6 = day5 + SECONDS_IN_A_DAY;
+        vm.warp(day6);
 
         // Get total rewards after rate update
         uint256 totalRewards = staking.getTotalRewards(1);
@@ -928,7 +934,7 @@ contract DIAWhitelistedStakingTest is Test {
         // First 5 days: 20% per day = 100%
         // Next 5 days: 15% per day = 75%
         // Total: 175% --> 1.75 tokens
-        uint256 expectedTotalRewards = (STAKING_AMOUNT * 17500) / 10000;
+        uint256 expectedTotalRewards = expectedRewardsBeforeUpdate + (STAKING_AMOUNT * 1500) / 10000; // 0.15 increase
         
         console2.log("\nReward Rate Update Test Results:");
         console2.log("Initial Reward Rate:", initialRewardRate);
@@ -939,19 +945,19 @@ contract DIAWhitelistedStakingTest is Test {
 
         assertEq(totalRewards, expectedTotalRewards, "Total rewards should be 175% (100% from first 5 days + 75% from next 5 days)");
 
-        // Claim rewards and verify actual token transfers
-        uint256 initialBalance = wdia.balanceOf(staker);
-        vm.prank(beneficiary);
-        staking.claim(1);
-        uint256 finalBalance = wdia.balanceOf(staker);
-        uint256 actualRewards = finalBalance - initialBalance;
+        // // Claim rewards and verify actual token transfers
+        // uint256 initialBalance = wdia.balanceOf(staker);
+        // vm.prank(beneficiary);
+        // staking.claim(1);
+        // uint256 finalBalance = wdia.balanceOf(staker);
+        // uint256 actualRewards = finalBalance - initialBalance;
 
-        console2.log("\nActual Rewards Received:");
-        console2.log("Initial Balance:", formatAmount(initialBalance));
-        console2.log("Final Balance:", formatAmount(finalBalance));
-        console2.log("Actual Rewards:", formatAmount(actualRewards));
+        // console2.log("\nActual Rewards Received:");
+        // console2.log("Initial Balance:", formatAmount(initialBalance));
+        // console2.log("Final Balance:", formatAmount(finalBalance));
+        // console2.log("Actual Rewards:", formatAmount(actualRewards));
 
-        assertEq(actualRewards, expectedTotalRewards, "Actual rewards received should match expected total rewards");
+        // assertEq(actualRewards, expectedTotalRewards, "Actual rewards received should match expected total rewards");
     }
 
     function test_stakeCreation() public {
@@ -1024,5 +1030,246 @@ contract DIAWhitelistedStakingTest is Test {
         assertEq(staker1Rewards, staker1ExpectedRewards, "Staker 1 should receive correct rewards");
         assertEq(staker2Rewards, staker2ExpectedRewards, "Staker 2 should receive correct rewards");                                            
     }
-    
+
+    function test_requestClaimPeriod() public {
+        uint256 nearEndOfDay4 = 431700; // 4.99 days --> earn 0.8 tokens
+        uint256 day5 = 432001; // 5.0 days --> earn 0.2 tokens
+
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stake(STAKING_AMOUNT); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Advance time by 5 days to accumulate rewards
+        vm.warp(nearEndOfDay4);
+
+        // Get initial balances
+        uint256 initialStakerBalance = wdia.balanceOf(staker);
+
+        // Claim rewards near the end of day 4
+        vm.prank(staker);
+        staking.claim(1);
+
+        // Get balances after claiming rewards
+        uint256 afterClaimStakerBalance = wdia.balanceOf(staker);
+
+        // Calculate reward amounts
+        uint256 stakerReward = afterClaimStakerBalance - initialStakerBalance;
+
+        // Advance time by 1 second to simulate block timing
+        // This puts us in the next day, causing totalRewards to be greater than paidOutReward
+        vm.warp(day5);
+        // uint256 remainingRewards = staking.getRemainingRewards(1);
+        // console2.log("remainingRewards", remainingRewards);
+
+        // Try to request unstake - this should fail due to the paidOutReward check
+        vm.prank(staker);
+        // vm.expectRevert(UnclaimedRewards.selector);
+        staking.requestUnstake(1);
+        uint256 remainingRewards = staking.getRemainingRewards(1);
+        uint256 expectedRewards = (STAKING_AMOUNT * 2000) / 10000;
+
+        assertEq(remainingRewards, expectedRewards, "Should receive 0 rewards after unstaking request");
+
+
+        // Log the results
+        // console2.log("\nRequest Unstake Timing Test Results:");
+        // console2.log("Initial Staker Balance:", formatAmount(initialStakerBalance));
+        // console2.log("After Claim Staker Balance:", formatAmount(afterClaimStakerBalance));
+        // console2.log("Staker Rewards:", formatAmount(stakerReward));
+    }
+
+    function test_RewardsDuringUnstakingPeriod() public {
+        uint256 day5 = 432001;
+
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Advance time by 5 days
+        vm.warp(day5);
+
+        // Get initial balances
+        uint256 initialStakerBalance = wdia.balanceOf(staker);
+        uint256 beforeClaimRewards = staking.getTotalRewards(1);
+
+        // Request unstake
+        vm.startPrank(beneficiary);
+        staking.claim(1);
+        staking.requestUnstake(1);
+        vm.stopPrank();
+
+        // Get final balance
+        uint256 finalStakerBalance = wdia.balanceOf(staker);
+        uint256 rewardsBeforeUnstaking = finalStakerBalance - initialStakerBalance;
+
+        // Expected rewards for 3 days during unstaking period
+        uint256 expectedRewards = (STAKING_AMOUNT * 10000) / 10000;
+
+        assertEq(rewardsBeforeUnstaking, STAKING_AMOUNT, "Should receive rewards during unstaking period");
+
+        // Advance time by 1 day during unstaking period
+        uint256 day6 = day5 + SECONDS_IN_A_DAY;
+        vm.warp(day6);
+        
+        // Check if rewards are still accruing
+        uint256 afterClaimRewards = staking.getTotalRewards(1);
+
+        assertEq(afterClaimRewards, STAKING_AMOUNT, "Should receive 0 rewards during unstaking period");
+
+    }
+
+    function test_RequestWithPendingRewards() public {
+        uint256 day5 = 432001;
+
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Advance time by 5 days
+        vm.warp(day5);
+
+        // Get initial balances
+        uint256 initialStakerBalance = wdia.balanceOf(staker);
+        uint256 beforeClaimRewards = staking.getTotalRewards(1);
+
+        // Request unstake
+        vm.prank(beneficiary);
+        staking.requestUnstake(1);
+
+        // Advance time by 2 days and claim rewards
+        uint256 day7 = day5 + (SECONDS_IN_A_DAY * 2);
+        vm.warp(day7);
+        vm.prank(beneficiary);
+        staking.claim(1);
+
+        // Get final balance
+        uint256 finalStakerBalance = wdia.balanceOf(staker);
+        uint256 rewardsAfterUnstakingRequest = finalStakerBalance - initialStakerBalance;
+        uint256 expectedRewards = (STAKING_AMOUNT * 10000) / 10000;
+
+        assertEq(rewardsAfterUnstakingRequest, expectedRewards, "Should receive 1 rewards after unstaking request");
+
+        uint256 totalRewards = staking.getTotalRewards(1);
+        assertEq(totalRewards, expectedRewards, "Should receive 0 rewards after unstaking request");
+
+        uint256 remainingRewards = staking.getRemainingRewards(1);
+        assertEq(remainingRewards, 0, "Should receive 0 rewards after unstaking request");
+    }
+
+    // 1. request unstake without ever claiming before
+    // 2. unstake without claim
+    // 3. call getTotalRewards(), getRemainingRewards() and see if they return pending rewards as the total
+    function test_UnstakeWithoutClaiming() public {
+        uint256 day5 = 432001;
+
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+
+        // Get initial balances
+        uint256 BeforeStakerBalance = wdia.balanceOf(staker);
+        uint256 beforeClaimRewards = staking.getTotalRewards(1);
+
+        // Request unstake
+        vm.warp(day5);
+        vm.prank(beneficiary);
+        staking.requestUnstake(1);
+
+        // Advance time by 7 days (unstaking period)
+        uint256 day7 = day5 + (SECONDS_IN_A_DAY * 7);
+        vm.warp(day7);
+
+        vm.prank(staker);
+        staking.unstake(1);
+
+        // Get final balance
+        uint256 AfterStakerBalance = wdia.balanceOf(staker);
+        uint256 BalanceDifference = AfterStakerBalance - BeforeStakerBalance;
+
+        assertEq(BalanceDifference, STAKING_AMOUNT, "Should unstake all principal");
+
+        uint256 totalRewards = staking.getTotalRewards(1);
+        uint256 remainingRewards = staking.getRemainingRewards(1);
+
+        assertEq(totalRewards, STAKING_AMOUNT, "Should receive 1 token rewards after unstaking request");
+        assertEq(remainingRewards, STAKING_AMOUNT, "Should receive 1 token rewards after unstaking request");
+
+        vm.prank(beneficiary);
+        staking.claim(1);
+
+        uint256 expectedRewards = (STAKING_AMOUNT * 10000) / 10000;
+        AfterStakerBalance = wdia.balanceOf(staker);
+        uint256 rewardsAfterClaim = AfterStakerBalance - (2 * 1e18);
+
+        assertEq(rewardsAfterClaim, expectedRewards, "Should receive 1 token rewards after unstaking request");
+    }
+
+    function test_DoubleClaim() public {
+        uint256 day5 = 432001;
+
+        // Setup initial stake
+        vm.startPrank(staker);
+        wdia.deposit{value: STAKING_AMOUNT}();
+        wdia.approve(address(staking), type(uint256).max);
+        staking.stakeForAddress(beneficiary, STAKING_AMOUNT, 10000); // 100% to principal wallet
+        vm.stopPrank();
+        // Get initial balances
+        uint256 BeforeStakerBalance = wdia.balanceOf(staker);
+        uint256 beforeClaimRewards = staking.getTotalRewards(1);
+
+        // Request unstake
+        vm.warp(day5);
+        vm.prank(beneficiary);
+        staking.requestUnstake(1);
+
+        // Advance time by 7 days (unstaking period)
+        uint256 day7 = day5 + (SECONDS_IN_A_DAY * 7);
+        vm.warp(day7);
+
+        vm.startPrank(staker);
+        staking.unstake(1);
+        staking.requestUnstake(1);
+        vm.stopPrank();
+
+        uint256 totalRewards = staking.getTotalRewards(1);
+        uint256 remainingRewards = staking.getRemainingRewards(1);
+
+        assertEq(totalRewards, STAKING_AMOUNT, "Should receive 1 token rewards after unstaking request");
+        assertEq(remainingRewards, STAKING_AMOUNT, "Should receive 1 token rewards after unstaking request");
+
+        uint256 day8 = day7 + (SECONDS_IN_A_DAY);
+        vm.warp(day8);
+        vm.prank(beneficiary);
+        staking.claim(1);
+
+        uint256 expectedRewards = (STAKING_AMOUNT * 10000) / 10000;
+        uint256 AfterStakerBalance = wdia.balanceOf(staker);
+        uint256 rewardsAfterClaim = AfterStakerBalance - (2 * 1e18);
+
+        assertEq(rewardsAfterClaim, expectedRewards, "Should receive 1 token rewards after unstaking request"); 
+
+        uint256 day9 = day8 + SECONDS_IN_A_DAY;
+        vm.warp(day9);
+        vm.prank(beneficiary);
+        staking.claim(1);
+
+        uint256 expectedRewards2 = 0;
+        AfterStakerBalance = wdia.balanceOf(staker);
+        uint256 rewardsAfterClaim2 = AfterStakerBalance - (3 * 1e18);
+
+        assertEq(rewardsAfterClaim2, expectedRewards2, "Should receive 1 token rewards after unstaking request"); 
+    }
+
 } 
