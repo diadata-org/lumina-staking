@@ -462,7 +462,7 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
 
         uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) /
             currentAmountOfPool;
-        if (poolSharesUnstakeAmount <= maxPoolSharesUnstakeAmount) {
+        if (poolSharesUnstakeAmount > maxPoolSharesUnstakeAmount) {
             revert UnstakeSharesSlippageExceeded();
         }
         uint256 principalUnstakeAmount = (currentStore.principal * amount) /
