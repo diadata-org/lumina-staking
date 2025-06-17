@@ -602,6 +602,16 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         return _getCurrentPrincipalWalletShareBps(stakingStoreIndex);
     }
 
+    function getPoolSharesUnstakeAmount(
+        uint256 stakingStoreIndex,
+        uint256 amount
+    ) public view returns (uint256) {
+        uint256 currentAmountOfPool = (stakingStores[stakingStoreIndex].poolShares *
+            totalPoolSize) / totalShareAmount;
+        return (stakingStores[stakingStoreIndex].poolShares * amount) /
+            currentAmountOfPool;
+    }
+
     /**
      * @notice Calculates the reward for a given staking store
      * @param stakingStoreIndex Index of the staking store
