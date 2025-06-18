@@ -144,7 +144,8 @@ contract DIAWhitelistedStaking is
             rewardToSend = currentStore.pendingRewards;
             currentStore.isClaimable = false;
         } else if (
-            currentStore.pendingRewards == 0 && !currentStore.isClaimable
+            (currentStore.pendingRewards == 0 && !currentStore.isClaimable) ||
+            currentStore.unstakingRequestTime != 0
         ) {
             rewardToSend = 0;
         } else {
@@ -196,8 +197,13 @@ contract DIAWhitelistedStaking is
         uint256 stakingStoreIndex
     ) external nonReentrant onlyBeneficiaryOrPayoutWallet(stakingStoreIndex) {
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
+
         if (currentStore.unstakingRequestTime != 0) {
             revert AlreadyRequestedUnstake();
+        }
+
+        if (currentStore.principal == 0) {
+            revert NoStakedPrincipal();
         }
 
         if (currentStore.pendingRewards == 0 && currentStore.isClaimable) {
@@ -387,12 +393,13 @@ contract DIAWhitelistedStaking is
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         uint256 stakerTotalRewards;
 
-        if (currentStore.pendingRewards != 0 || currentStore.unstakingRequestTime != 0) {
+        if (currentStore.pendingRewards != 0) {
             stakerTotalRewards =
                 currentStore.paidOutReward +
                 currentStore.pendingRewards;
         } else if (
-            (currentStore.pendingRewards == 0 && !currentStore.isClaimable)
+            (currentStore.pendingRewards == 0 && !currentStore.isClaimable) ||
+            currentStore.unstakingRequestTime != 0
         ) {
             stakerTotalRewards = currentStore.paidOutReward;
         } else {
@@ -423,10 +430,11 @@ contract DIAWhitelistedStaking is
         StakingStore storage currentStore = stakingStores[stakingStoreIndex];
         uint256 stakerRemainingRewards;
 
-        if (currentStore.pendingRewards != 0 || currentStore.unstakingRequestTime != 0) {
+        if (currentStore.pendingRewards != 0) {
             stakerRemainingRewards = currentStore.pendingRewards;
         } else if (
-            currentStore.pendingRewards == 0 && !currentStore.isClaimable
+            (currentStore.pendingRewards == 0 && !currentStore.isClaimable) ||
+            currentStore.unstakingRequestTime != 0
         ) {
             stakerRemainingRewards = 0;
         } else {

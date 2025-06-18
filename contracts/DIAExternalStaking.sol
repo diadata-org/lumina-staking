@@ -606,9 +606,10 @@ contract DIAExternalStaking is Ownable, ReentrancyGuard {
         uint256 stakingStoreIndex,
         uint256 amount
     ) public view returns (uint256) {
-        uint256 currentAmountOfPool = (stakingStores[stakingStoreIndex].poolShares *
-            totalPoolSize) / totalShareAmount;
-        return (stakingStores[stakingStoreIndex].poolShares * amount) /
+        uint256 currentAmountOfPool = (stakingStores[stakingStoreIndex]
+            .poolShares * totalPoolSize) / totalShareAmount;
+        return
+            (stakingStores[stakingStoreIndex].poolShares * amount) /
             currentAmountOfPool;
     }
 
