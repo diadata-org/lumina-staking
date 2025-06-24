@@ -45,6 +45,8 @@ For a high-level introduction to Lumina, see [Lumina docs](https://docs.diadata.
 - [`StakingErrorsAndEvents.sol`](./contracts/StakingErrorsAndEvents.sol): A contract that defines common errors and events used across the staking system, providing standardized error handling and event emission.
 - [`WDIA.sol`](./contracts/WDIA.sol): A simple wrapped DIA token contract that allows users to deposit and withdraw DIA tokens, implementing basic ERC20 functionality.
 
+The contracts have been audited by MixBytes. You can view the report [here](https://github.com/mixbytes/audits_public/tree/master/DIA/Lumina%20Staking).
+
 ## Installation
 
 Clone the repository:
