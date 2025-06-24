@@ -1,101 +1,703 @@
-// SPDX-License-Identifier: GPL
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.29;
 
-pragma solidity 0.8.26;
+import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./StakingErrorsAndEvents.sol";
 
-import "Ownable.sol";
-import "IERC20.sol";
-import "DIARewardsDistribution.sol";
+/**
+ * @title DIAExternalStaking
+ * @notice A staking contract that allows users to stake tokens and earn rewards
+ * @dev Implements external staking functionality with principal/reward sharing and daily withdrawal limits
+ */
+contract DIAExternalStaking is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
 
-contract DIAExternalStaking is Ownable, DIARewardsDistribution {
-    struct StakingStore {
-        address beneficiary;
-        uint256 principal;
-        uint256 reward;
-        uint256 stakingStartTime;
-        uint256 unstakingRequestTime;
+    /// @notice Mapping of beneficiary addresses to their staking indices
+    mapping(address => uint256[]) internal stakingIndicesByBeneficiary;
+
+    /// @notice Mapping of principal unstaker addresses to their staking indices
+    mapping(address => uint256[]) internal stakingIndicesByPrincipalUnstaker;
+
+    /// @notice Mapping of payout wallet addresses to their staking indices
+    mapping(address => uint256[]) internal stakingIndicesByPayoutWallet;
+
+    /// @notice Maximum number of stakes allowed per beneficiary
+    uint256 public maxStakesPerBeneficiary = 100;
+
+    /// @notice Current staking index counter
+    uint256 public stakingIndex;
+
+    /// @notice Structure for pending share updates
+    struct PendingShareUpdate {
+        uint32 newShareBps; // New share in basis points
+        uint64 requestTime; // Time when update was requested
     }
 
-    // How long (in seconds) for unstaking to take place
-    uint256 unstakingDuration;
+    /// @notice Mapping of stake IDs to their pending share updates
+    mapping(uint256 => PendingShareUpdate) public pendingShareUpdates;
 
-    IERC20 public stakingToken;
+    /// @notice Grace period for share updates (1 day)
+    uint64 public constant SHARE_UPDATE_GRACE_PERIOD = 1 days;
 
-    uint256 numStakers;
+    /// @notice ERC20 token used for staking
+    IERC20 public immutable STAKING_TOKEN;
 
-    mapping(uint256 => StakingStore) public stakingStores;
-
-    constructor(uint256 newUnstakingDuration, address stakingTokenAddress, uint256 rewardRatePerDay) 
-    Ownable(msg.sender) DIARewardsDistribution(stakingTokenAddress, rewardRatePerDay) {
-        unstakingDuration = newUnstakingDuration;
-        stakingToken = IERC20(stakingTokenAddress);
+    /// @notice Structure for storing staking information
+    struct ExternalStakingStore {
+        address beneficiary; // Address receiving rewards
+        address principalPayoutWallet; // Address receiving principal
+        address principalUnstaker; // Address allowed to unstake principal
+        uint256 principal; // Amount of tokens staked
+        uint256 poolShares; // Share of the total pool
+        uint64 stakingStartTime; // When staking began
+        uint64 unstakingRequestTime; // When unstaking was requested
+        uint32 principalWalletShareBps; // Share of rewards going to principal wallet
+        uint256 requestedUnstakePrincipalAmount;
+        uint256 requestedUnstakePrincipalRewardAmount;
+        uint256 requestedUnstakeRewardAmount;
     }
 
-    // Stake
-    function stake(uint256 amount) public {
-        // Get the tokens into the staking contract
-        require(stakingToken.transfer(address(this), amount));
-        // Register tokens after transfer
-        numStakers++;
-        StakingStore storage newStore = stakingStores[numStakers];
-        newStore.beneficiary = msg.sender;
+    /// @notice Total size of the staking pool
+    uint256 public totalPoolSize;
+
+    /// @notice Total amount of pool shares
+    uint256 public totalShareAmount;
+
+    /// @notice Total amount of tokens staked
+    uint256 public tokensStaked;
+
+    /// @notice Maximum amount of tokens that can be staked
+    uint256 public stakingLimit;
+
+    /// @notice Duration required before unstaking can be completed
+    uint256 public unstakingDuration;
+
+    /// @notice Total amount withdrawn in the current day
+    uint256 public totalDailyWithdrawals;
+
+    /// @notice Timestamp of the last day when withdrawals were reset
+    uint256 public lastWithdrawalResetDay;
+
+    /// @notice Minimum pool size required to trigger withdrawal limits
+    uint256 public dailyWithdrawalThreshold = 100000 * 10 ** 18;
+
+    /// @notice Maximum percentage of pool that can be withdrawn per day (in basis points)
+    uint256 public withdrawalCapBps = 1000; // 1000 bps = 10%
+
+    /// @notice Mapping of staking indices to their corresponding staking stores
+    mapping(uint256 => ExternalStakingStore) public stakingStores;
+
+    /**
+     * @notice Modifier to check if caller is beneficiary or payout wallet
+     * @param stakingStoreIndex Index of the staking store
+     * @custom:revert AccessDenied if caller is neither beneficiary nor principal unstaker
+     */
+    modifier onlyBeneficiaryOrPrincipalUnstaker(uint256 stakingStoreIndex) {
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
+        if (
+            msg.sender != currentStore.beneficiary &&
+            msg.sender != currentStore.principalUnstaker
+        ) {
+            revert AccessDenied();
+        }
+        _;
+    }
+
+    /**
+     * @notice Modifier to check daily withdrawal limits
+     * @param amount Amount to be withdrawn
+     * @custom:revert DailyWithdrawalLimitExceeded if withdrawal would exceed daily limit
+     */
+    modifier checkDailyWithdrawalLimit(uint256 amount) {
+        if (block.timestamp / SECONDS_IN_A_DAY > lastWithdrawalResetDay) {
+            totalDailyWithdrawals = 0;
+            lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
+        }
+
+        if (totalPoolSize > dailyWithdrawalThreshold) {
+            uint256 availableDailyLimit = (totalPoolSize * withdrawalCapBps) /
+                10000;
+            if (totalDailyWithdrawals + amount > availableDailyLimit) {
+                revert DailyWithdrawalLimitExceeded();
+            }
+        }
+        _;
+    }
+
+    /**
+     * @notice Initializes the contract with staking parameters
+     * @param _unstakingDuration Duration required before unstaking can be completed
+     * @param _stakingTokenAddress Address of the ERC20 token used for staking
+     * @param _stakingLimit Maximum amount of tokens that can be staked
+     * @custom:revert ZeroAddress if staking token address is zero
+     * @custom:revert InvalidStakingLimit if staking limit is zero
+     */
+    constructor(
+        uint256 _unstakingDuration,
+        address _stakingTokenAddress,
+        uint256 _stakingLimit
+    ) Ownable(msg.sender) {
+        if (_stakingTokenAddress == address(0)) revert ZeroAddress();
+        if (_stakingLimit == 0) revert InvalidStakingLimit();
+
+        if (_unstakingDuration < 1 days) {
+            revert UnstakingDurationTooShort();
+        }
+        if (_unstakingDuration > 20 days) {
+            revert UnstakingDurationTooLong();
+        }
+
+        unstakingDuration = _unstakingDuration;
+        STAKING_TOKEN = IERC20(_stakingTokenAddress);
+        stakingLimit = _stakingLimit;
+        lastWithdrawalResetDay = block.timestamp / SECONDS_IN_A_DAY;
+    }
+
+    /**
+     * @notice Allows a user to stake tokens directly
+     * @param amount Amount of tokens to stake
+     * @param principalWalletShareBps Share of rewards going to principal wallet in basis points
+     */
+    function stake(
+        uint256 amount,
+        uint32 principalWalletShareBps
+    ) public nonReentrant {
+        _stake(msg.sender, amount, principalWalletShareBps, msg.sender);
+    }
+
+    /**
+     * @notice Stakes tokens on behalf of a given address
+     * @param beneficiaryAddress Address receiving the staking rewards
+     * @param amount Amount of tokens to be staked
+     * @param principalWalletShareBps Share of rewards going to principal wallet in basis points
+     */
+    function stakeForAddress(
+        address beneficiaryAddress,
+        uint256 amount,
+        uint32 principalWalletShareBps
+    ) public nonReentrant {
+        _stake(beneficiaryAddress, amount, principalWalletShareBps, msg.sender);
+    }
+
+    /**
+     * @notice Internal function to handle staking logic
+     * @param beneficiaryAddress Address receiving the staking rewards
+     * @param amount Amount of tokens to be staked
+     * @param principalWalletShareBps Share of rewards going to principal wallet in basis points
+     * @param staker Address performing the stake operation
+     * @custom:revert AmountAboveStakingLimit if amount exceeds staking limit
+     * @custom:revert InvalidPrincipalWalletShare if share exceeds 100%
+     * @custom:revert AmountBelowMinimumStake if amount is below minimum stake
+     */
+    function _stake(
+        address beneficiaryAddress,
+        uint256 amount,
+        uint32 principalWalletShareBps,
+        address staker
+    ) internal {
+        if (amount > (stakingLimit - tokensStaked)) {
+            revert AmountAboveStakingLimit(amount);
+        }
+
+        if (principalWalletShareBps > 10000)
+            revert InvalidPrincipalWalletShare();
+
+        if (amount < minimumStake) {
+            revert AmountBelowMinimumStake(amount);
+        }
+
+        if (
+            stakingIndicesByBeneficiary[beneficiaryAddress].length >=
+            maxStakesPerBeneficiary
+        ) {
+            revert MaxStakesPerBeneficiaryReached();
+        }
+
+        STAKING_TOKEN.safeTransferFrom(staker, address(this), amount);
+
+        uint256 poolSharesGiven = 0;
+        if (totalShareAmount == 0) {
+            poolSharesGiven = amount;
+        } else {
+            poolSharesGiven = (amount * totalShareAmount) / totalPoolSize;
+        }
+
+        if (poolSharesGiven == 0) {
+            revert ZeroPoolSharesMinted();
+        }
+
+        totalPoolSize += amount;
+        totalShareAmount += poolSharesGiven;
+
+        stakingIndex++;
+        ExternalStakingStore storage newStore = stakingStores[stakingIndex];
+        newStore.beneficiary = beneficiaryAddress;
+        newStore.principalPayoutWallet = staker;
         newStore.principal = amount;
-        newStore.stakingStartTime = block.timestamp;
+        newStore.poolShares = poolSharesGiven;
+        newStore.stakingStartTime = uint64(block.timestamp);
+        newStore.principalWalletShareBps = principalWalletShareBps;
+        newStore.principalUnstaker = staker;
+
+        tokensStaked += amount;
+        stakingIndicesByBeneficiary[beneficiaryAddress].push(stakingIndex);
+        stakingIndicesByPrincipalUnstaker[staker].push(stakingIndex);
+        stakingIndicesByPayoutWallet[staker].push(stakingIndex);
+
+        emit Staked(beneficiaryAddress, stakingIndex, amount);
     }
 
-    // Request to unstake, the unstake period starts now.
-    // This can only be requested once.
-    function requestUnstake(uint256 stakingStoreIndex) external {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        require(msg.sender == currentStore.beneficiary, "Only beneficiary can request unstake.");
-        require(currentStore.unstakingRequestTime == 0, "You can only request to unstake once.");
-        currentStore.unstakingRequestTime = block.timestamp;
-    }
-
-    function unstake(uint256 stakingStoreIndex) external {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        require(currentStore.unstakingRequestTime > 0, "Unstaking must be requested first.");
-        require(currentStore.unstakingRequestTime + unstakingDuration <= block.timestamp, "The unstaking duration must pass after unstaking has been requested.");
-
-        // Ensure the reward amount is up to date
-        updateReward(stakingStoreIndex);
-
-        uint256 rewardToSend = currentStore.reward;
-        currentStore.reward = 0;
-        uint256 principalToSend = currentStore.principal;
-        currentStore.principal = 0;
-        
-        // Send tokens to beneficiary
-        stakingToken.transfer(currentStore.beneficiary, principalToSend);
-        stakingToken.transferFrom(rewardsWallet, currentStore.beneficiary, rewardToSend);
-    }
-
-    // Update unstaking duration, measured in seconds
-    function setUnstakingDuration(uint256 newDuration) onlyOwner external {
-        require(newDuration >= 1 * 24 * 60 * 60, "Minimal unstaking duration is 1 day");
-        require(newDuration <= 20 * 24 * 60 * 60, "Maximum unstaking duration is 20 days");
+    /**
+     * @notice Updates the duration required before unstaking can be completed
+     * @param newDuration New unstaking duration in seconds
+     * @custom:revert UnstakingDurationTooShort if duration is less than 1 day
+     * @custom:revert UnstakingDurationTooLong if duration exceeds 20 days
+     */
+    function setUnstakingDuration(uint256 newDuration) external onlyOwner {
+        if (newDuration < 1 days) {
+            revert UnstakingDurationTooShort();
+        }
+        if (newDuration > 20 days) {
+            revert UnstakingDurationTooLong();
+        }
+        emit UnstakingDurationUpdated(unstakingDuration, newDuration);
         unstakingDuration = newDuration;
     }
 
-    function getRewardForStakingStore(uint256 stakingStoreIndex) public view override returns(uint256) {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        
-        // Calculate number of full days that passed for staking store
-        uint256 passedSeconds = block.timestamp - currentStore.stakingStartTime;
-        uint256 passedDays = passedSeconds / 24 * 60 * 60;
-
-        uint256 accumulatedReward = currentStore.principal;
-        for (uint i = 0; i < passedDays; ++i) {
-            accumulatedReward += (accumulatedReward * rewardRatePerDay) / 1e10;
+    /**
+     * @notice Updates the withdrawal cap in basis points
+     * @param newBps New cap value in basis points
+     * @custom:revert InvalidWithdrawalCap if new cap exceeds 10000 bps
+     */
+    function setWithdrawalCapBps(uint256 newBps) external onlyOwner {
+        if (newBps > 10000) {
+            revert InvalidWithdrawalCap(newBps);
         }
-        return accumulatedReward - currentStore.principal;
+        uint256 oldCap = withdrawalCapBps;
+        withdrawalCapBps = newBps;
+        emit WithdrawalCapUpdated(oldCap, newBps);
     }
-    
-    // Calculate and store reward for the staker
-    function updateReward(uint256 stakingStoreIndex) public {
-        StakingStore storage currentStore = stakingStores[stakingStoreIndex];
-        uint256 reward = getRewardForStakingStore(stakingStoreIndex);
-        assert(reward >= currentStore.reward);
 
-        currentStore.reward = reward;
+    /**
+     * @notice Updates the daily withdrawal threshold
+     * @param newThreshold New threshold value
+     * @custom:revert InvalidDailyWithdrawalThreshold if new threshold is 0
+     */
+    function setDailyWithdrawalThreshold(
+        uint256 newThreshold
+    ) external onlyOwner {
+        if (newThreshold == 0) {
+            revert InvalidDailyWithdrawalThreshold(newThreshold);
+        }
+        uint256 oldThreshold = dailyWithdrawalThreshold;
+        dailyWithdrawalThreshold = newThreshold;
+        emit DailyWithdrawalThresholdUpdated(oldThreshold, newThreshold);
+    }
+
+    /**
+     * @notice Gets all staking indices for a beneficiary
+     * @param beneficiary Address of the beneficiary
+     * @return Array of staking indices
+     */
+    function getStakingIndicesByBeneficiary(
+        address beneficiary
+    ) external view returns (uint256[] memory) {
+        return stakingIndicesByBeneficiary[beneficiary];
+    }
+
+    /**
+     * @notice Gets all staking indices for a principal unstaker
+     * @param unstaker Address of the principal unstaker
+     * @return Array of staking indices
+     */
+    function getStakingIndicesByPrincipalUnstaker(
+        address unstaker
+    ) external view returns (uint256[] memory) {
+        return stakingIndicesByPrincipalUnstaker[unstaker];
+    }
+
+    /**
+     * @notice Gets all staking indices for a payout wallet
+     * @param payoutWallet Address of the payout wallet
+     * @return Array of staking indices
+     */
+    function getStakingIndicesByPayoutWallet(
+        address payoutWallet
+    ) external view returns (uint256[] memory) {
+        return stakingIndicesByPayoutWallet[payoutWallet];
+    }
+
+    /**
+     * @notice Internal function to remove a staking index from an address mapping
+     * @param user Address to remove index from
+     * @param _stakingIndex Index to remove
+     * @param indexMap Mapping to remove from
+     */
+    function _removeStakingIndexFromAddressMapping(
+        address user,
+        uint256 _stakingIndex,
+        mapping(address => uint256[]) storage indexMap
+    ) internal {
+        uint256[] storage indices = indexMap[user];
+        for (uint256 i = 0; i < indices.length; i++) {
+            if (indices[i] == _stakingIndex) {
+                indices[i] = indices[indices.length - 1];
+                indices.pop();
+                break;
+            }
+        }
+    }
+
+    /**
+     * @notice Updates the principal payout wallet for a stake
+     * @param newWallet New wallet address for receiving principal
+     * @param stakingStoreIndex Index of the staking store
+     * @custom:revert ZeroAddress if new wallet is zero address
+     * @custom:revert NotPrincipalUnstaker if caller is not the principal unstaker
+     */
+    function updatePrincipalPayoutWallet(
+        address newWallet,
+        uint256 stakingStoreIndex
+    ) external {
+        if (newWallet == address(0)) revert ZeroAddress();
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
+        address oldWallet = currentStore.principalPayoutWallet;
+        currentStore.principalPayoutWallet = newWallet;
+
+        if (currentStore.principalUnstaker != msg.sender) {
+            revert NotPrincipalUnstaker();
+        }
+
+        _removeStakingIndexFromAddressMapping(
+            oldWallet,
+            stakingStoreIndex,
+            stakingIndicesByPayoutWallet
+        );
+        stakingIndicesByPayoutWallet[newWallet].push(stakingStoreIndex);
+
+        emit PrincipalPayoutWalletUpdated(
+            oldWallet,
+            newWallet,
+            stakingStoreIndex
+        );
+    }
+
+    /**
+     * @notice Updates the principal unstaker for a stake
+     * @param newUnstaker New address allowed to unstake principal
+     * @param stakingStoreIndex Index of the staking store
+     * @custom:revert ZeroAddress if new unstaker is zero address
+     * @custom:revert NotPrincipalUnstaker if caller is not the current principal unstaker
+     */
+    function updatePrincipalUnstaker(
+        address newUnstaker,
+        uint256 stakingStoreIndex
+    ) external {
+        if (newUnstaker == address(0)) revert ZeroAddress();
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
+        if (currentStore.principalUnstaker != msg.sender) {
+            revert NotPrincipalUnstaker();
+        }
+
+        address oldWallet = currentStore.principalUnstaker;
+
+        currentStore.principalUnstaker = newUnstaker;
+
+        _removeStakingIndexFromAddressMapping(
+            oldWallet,
+            stakingStoreIndex,
+            stakingIndicesByPrincipalUnstaker
+        );
+
+        stakingIndicesByPrincipalUnstaker[newUnstaker].push(stakingStoreIndex);
+
+        emit PrincipalUnstakerUpdated(
+            oldWallet,
+            newUnstaker,
+            stakingStoreIndex
+        );
+    }
+
+    /**
+     * @notice Requests unstaking, starting the waiting period
+     * @param stakingStoreIndex Index of the staking store
+     * @param amount Amount to unstake
+     * @param maxPoolSharesUnstakeAmount Amount of shares to maximally unstake, as slippage protection
+     * @dev revert AlreadyRequestedUnstake if unstaking was already requested
+     * @dev revert AccessDenied if caller is not beneficiary or payout wallet
+     * @dev revert UnstakeSharesSlippageExceeded if share slippage is too high
+     */
+    function requestUnstake(
+        uint256 stakingStoreIndex,
+        uint256 amount,
+        uint256 maxPoolSharesUnstakeAmount
+    )
+        external
+        nonReentrant
+        onlyBeneficiaryOrPrincipalUnstaker(stakingStoreIndex)
+        checkDailyWithdrawalLimit(amount)
+    {
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
+        if (currentStore.unstakingRequestTime != 0) {
+            revert AlreadyRequestedUnstake();
+        }
+        currentStore.unstakingRequestTime = uint64(block.timestamp);
+
+        uint256 currentAmountOfPool = (currentStore.poolShares *
+            totalPoolSize) / totalShareAmount;
+        if (amount > currentAmountOfPool) {
+            revert AmountExceedsStaked();
+        }
+
+        uint256 poolSharesUnstakeAmount = (currentStore.poolShares * amount) /
+            currentAmountOfPool;
+        if (poolSharesUnstakeAmount > maxPoolSharesUnstakeAmount) {
+            revert UnstakeSharesSlippageExceeded();
+        }
+        uint256 principalUnstakeAmount = (currentStore.principal * amount) /
+            currentAmountOfPool;
+        uint256 rewardUnstakeAmount = amount - principalUnstakeAmount;
+
+        uint256 principalToSend = principalUnstakeAmount;
+        uint256 rewardToSend = rewardUnstakeAmount;
+        currentStore.principal =
+            currentStore.principal -
+            principalUnstakeAmount;
+        tokensStaked -= principalUnstakeAmount;
+        currentStore.poolShares -= poolSharesUnstakeAmount;
+
+        totalDailyWithdrawals += amount;
+        totalPoolSize -= amount;
+        totalShareAmount -= poolSharesUnstakeAmount;
+
+        uint256 principalWalletReward = (rewardToSend *
+            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
+        uint256 beneficiaryReward = rewardToSend - principalWalletReward;
+
+        if (principalWalletReward > 0) {
+            currentStore
+                .requestedUnstakePrincipalRewardAmount = principalWalletReward;
+        }
+
+        currentStore.requestedUnstakePrincipalAmount = principalToSend;
+        currentStore.requestedUnstakeRewardAmount = beneficiaryReward;
+
+        emit UnstakeRequested(msg.sender, stakingStoreIndex);
+    }
+
+    /**
+     * @notice Completes the unstaking process after the required duration
+     * @param stakingStoreIndex Index of the staking store
+     * @custom:revert UnstakingNotRequested if unstaking was not requested
+     * @custom:revert UnstakingPeriodNotElapsed if unstaking period has not elapsed
+     * @custom:revert AmountExceedsStaked if amount exceeds staked amount
+     * @custom:revert DailyWithdrawalLimitExceeded if withdrawal would exceed daily limit
+     */
+    function unstake(
+        uint256 stakingStoreIndex
+    )
+        external
+        nonReentrant
+        onlyBeneficiaryOrPrincipalUnstaker(stakingStoreIndex)
+    {
+        ExternalStakingStore storage currentStore = stakingStores[
+            stakingStoreIndex
+        ];
+        if (currentStore.unstakingRequestTime == 0) {
+            revert UnstakingNotRequested();
+        }
+
+        if (
+            currentStore.unstakingRequestTime + unstakingDuration >
+            block.timestamp
+        ) {
+            revert UnstakingPeriodNotElapsed();
+        }
+
+        currentStore.unstakingRequestTime = 0;
+        if (currentStore.principal != 0) {
+            currentStore.stakingStartTime = uint64(block.timestamp);
+        }
+
+        if (currentStore.requestedUnstakePrincipalRewardAmount > 0) {
+            STAKING_TOKEN.safeTransfer(
+                currentStore.principalPayoutWallet,
+                currentStore.requestedUnstakePrincipalRewardAmount
+            );
+        }
+
+        if (currentStore.requestedUnstakePrincipalAmount > 0) {
+            STAKING_TOKEN.safeTransfer(
+                currentStore.principalPayoutWallet,
+                currentStore.requestedUnstakePrincipalAmount
+            );
+        }
+        if (currentStore.requestedUnstakeRewardAmount > 0) {
+            STAKING_TOKEN.safeTransfer(
+                currentStore.beneficiary,
+                currentStore.requestedUnstakeRewardAmount
+            );
+        }
+
+        emit Claimed(
+            stakingStoreIndex,
+            currentStore.requestedUnstakePrincipalRewardAmount,
+            currentStore.requestedUnstakePrincipalAmount,
+            currentStore.requestedUnstakeRewardAmount,
+            currentStore.principalPayoutWallet,
+            currentStore.beneficiary
+        );
+
+        currentStore.requestedUnstakePrincipalRewardAmount = 0;
+        currentStore.requestedUnstakePrincipalAmount = 0;
+        currentStore.requestedUnstakeRewardAmount = 0;
+    }
+
+    function addRewardToPool(uint256 amount) public onlyOwner {
+        STAKING_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
+        totalPoolSize += amount;
+        emit RewardAdded(amount, msg.sender);
+    }
+
+    /**
+     * @notice Gets the current principal wallet share basis points for a stake
+     * @param stakingStoreIndex ID of the stake
+     * @return Current principal wallet share in basis points
+     */
+    function _getCurrentPrincipalWalletShareBps(
+        uint256 stakingStoreIndex
+    ) internal view returns (uint32) {
+        PendingShareUpdate memory pending = pendingShareUpdates[
+            stakingStoreIndex
+        ];
+        if (
+            pending.requestTime > 0 &&
+            block.timestamp >= pending.requestTime + SHARE_UPDATE_GRACE_PERIOD
+        ) {
+            return pending.newShareBps;
+        }
+
+        return stakingStores[stakingStoreIndex].principalWalletShareBps;
+    }
+
+    /**
+     * @notice Gets the current principal wallet share basis points for a stake
+     * @param stakingStoreIndex of the stake
+     * @return Current principal wallet share in basis points
+     */
+    function getCurrentPrincipalWalletShareBps(
+        uint256 stakingStoreIndex
+    ) public view returns (uint32) {
+        return _getCurrentPrincipalWalletShareBps(stakingStoreIndex);
+    }
+
+    function getPoolSharesUnstakeAmount(
+        uint256 stakingStoreIndex,
+        uint256 amount
+    ) public view returns (uint256) {
+        uint256 currentAmountOfPool = (stakingStores[stakingStoreIndex]
+            .poolShares * totalPoolSize) / totalShareAmount;
+        return
+            (stakingStores[stakingStoreIndex].poolShares * amount) /
+            currentAmountOfPool;
+    }
+
+    /**
+     * @notice Calculates the reward for a given staking store
+     * @param stakingStoreIndex Index of the staking store
+     * @return Amount of rewards available
+     */
+    function getRewardForStakingStore(
+        uint256 stakingStoreIndex
+    ) public view returns (uint256, uint256) {
+        ExternalStakingStore storage store = stakingStores[stakingStoreIndex];
+        uint256 claimableTokens = (store.poolShares * totalPoolSize) /
+            totalShareAmount;
+        uint256 fullReward = claimableTokens - store.principal;
+        uint256 principalWalletReward = (fullReward *
+            _getCurrentPrincipalWalletShareBps(stakingStoreIndex)) / 10000;
+        return (principalWalletReward, fullReward - principalWalletReward);
+    }
+
+    /**
+     * @notice Requests an update to the principal wallet share
+     * @param stakingStoreIndex of the stake
+     * @param newShareBps New share in basis points
+     * @custom:revert NotBeneficiary if caller is not the beneficiary
+     * @custom:revert InvalidPrincipalWalletShare if new share exceeds 100%
+     */
+    function requestPrincipalWalletShareUpdate(
+        uint256 stakingStoreIndex,
+        uint32 newShareBps
+    ) external {
+        if (msg.sender != stakingStores[stakingStoreIndex].principalUnstaker) {
+            revert NotPrincipalUnstaker();
+        }
+
+        // update last state of pending
+
+        stakingStores[stakingStoreIndex]
+            .principalWalletShareBps = _getCurrentPrincipalWalletShareBps(
+            stakingStoreIndex
+        );
+
+        if (newShareBps > 10000) revert InvalidPrincipalWalletShare();
+
+        pendingShareUpdates[stakingStoreIndex] = PendingShareUpdate({
+            newShareBps: newShareBps,
+            requestTime: uint64(block.timestamp)
+        });
+
+        emit PrincipalWalletShareUpdateRequested(
+            stakingStoreIndex,
+            newShareBps,
+            block.timestamp
+        );
+    }
+
+    /**
+     * @notice Updates the staking limit
+     * @param newLimit New maximum amount of tokens that can be staked
+     * @custom:revert InvalidStakingLimit if new limit is zero
+     */
+    function setStakingLimit(uint256 newLimit) external onlyOwner {
+        if (newLimit == 0) revert InvalidStakingLimit();
+        uint256 oldLimit = stakingLimit;
+        stakingLimit = newLimit;
+        emit StakingLimitUpdated(oldLimit, newLimit);
+    }
+
+    /**
+     * @notice Updates the maximum number of stakes allowed per beneficiary
+     * @param newLimit New maximum number of stakes per beneficiary
+     * @custom:revert InvalidStakesPerBeneficiaryLimit if new limit is zero
+     */
+    function setMaxStakesPerBeneficiary(uint256 newLimit) external onlyOwner {
+        if (newLimit == 0) revert InvalidStakesPerBeneficiaryLimit();
+        uint256 oldLimit = maxStakesPerBeneficiary;
+        maxStakesPerBeneficiary = newLimit;
+        emit MaxStakesPerBeneficiaryUpdated(oldLimit, newLimit);
+    }
+
+    /**
+     * @notice Gets the number of stakes for a beneficiary
+     * @param beneficiary Address of the beneficiary
+     * @return Number of stakes for the beneficiary
+     */
+    function getStakesCountForBeneficiary(
+        address beneficiary
+    ) external view returns (uint256) {
+        return stakingIndicesByBeneficiary[beneficiary].length;
     }
 }
