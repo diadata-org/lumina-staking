@@ -9,7 +9,6 @@
     "prettier": "npx prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
     "lint": "npx solhint 'contracts/**/*.sol'",
     "linttest": "npx solhint 'test-foundry/**/*.sol'"
-
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
@@ -24,6 +23,8 @@
   },
   "dependencies": {
     "@hyperlane-xyz/utils": "^5.2.1",
+    "@ledgerhq/hw-app-eth": "^7.8.16",
+    "@ledgerhq/hw-transport-node-hid": "^6.33.5",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
     "@nomicfoundation/hardhat-ignition": "^0.15.10",
     "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
@@ -36,6 +37,7 @@
     "@types/mocha": ">=9.1.0",
     "chai": "^4.2.0",
     "dotenv": "^16.4.7",
+    "ethers": "^6.15.0",
     "hardhat-gas-reporter": "^1.0.8",
     "solidity-coverage": "^0.8.1",
     "typechain": "^8.3.0"
